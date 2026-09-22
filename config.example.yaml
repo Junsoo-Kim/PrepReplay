@@ -1,0 +1,16 @@
+# PrepReplay 설정 파일 예시
+#
+# 이 파일을 config.yaml 로 복사해서 사용하세요.
+#   Windows: copy config.example.yaml config.yaml
+#   macOS/Linux: cp config.example.yaml config.yaml
+#
+# 우선순위: CLI 옵션 > config.yaml > (이 파일에 적힌) 내장 기본값
+# config.yaml이 없어도 아래와 동일한 기본값으로 동작합니다.
+
+mode: default            # default | consulting | jobfair | lecture | interview
+output: output            # 결과물을 저장할 상위 디렉터리
+scene_threshold: 0.3      # 장면 전환 감지 임계값 (0.0~1.0, 낮을수록 더 많은 프레임 추출)
+split: null                # 예: "10m" (10분 단위 분할). null이면 분할하지 않음
+language: ko               # STT 언어 코드 (ko, en, auto 등)
+model: large-v3            # Whisper 모델 크기 (tiny/base/small/medium/large-v3)
+force: false                # 캐시된 산출물이 있어도 강제로 재생성할지 여부

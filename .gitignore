@@ -24,6 +24,9 @@ output/
 .cache/
 models/
 
+# 사용자별 설정 (config.example.yaml만 커밋, 실제 config.yaml은 개인 로컬 값)
+/config.yaml
+
 # 상태/로그
 state.json
 run.log
