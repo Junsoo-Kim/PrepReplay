@@ -121,3 +121,44 @@ def fake_whisper_model(monkeypatch: pytest.MonkeyPatch):
         "prepreplay.steps.transcribe._load_whisper_model_class", lambda: _FakeModel
     )
     return _FakeModel
+
+
+@pytest.fixture
+def fake_diarization_pipeline(monkeypatch: pytest.MonkeyPatch):
+    """실제 pyannote.audio 모델 다운로드/추론 없이 화자 분리 관련 테스트를 빠르고
+    결정론적으로 만든다. `fake_whisper_model`의 세그먼트 경계(0.0~1.5초 / 1.5~3.0초)와
+    일치하는 화자 2명을 만들어, "안녕하세요"는 화자1, "테스트입니다"는 화자2로
+    라벨링되는지까지 검증할 수 있게 한다.
+
+    prepreplay.steps.diarize._load_pipeline_class를 가짜 파이프라인 클래스로 교체한다.
+    """
+
+    class _FakeTurn:
+        def __init__(self, start: float, end: float) -> None:
+            self.start = start
+            self.end = end
+
+    class _FakeAnnotation:
+        def __init__(self, tracks: list[tuple]) -> None:
+            self._tracks = tracks
+
+        def itertracks(self, yield_label: bool = False):
+            yield from self._tracks
+
+    class _FakePipeline:
+        @classmethod
+        def from_pretrained(cls, model_name: str, use_auth_token=None) -> "_FakePipeline":
+            return cls()
+
+        def __call__(self, audio_path: str) -> _FakeAnnotation:
+            return _FakeAnnotation(
+                [
+                    (_FakeTurn(0.0, 1.5), "_", "SPEAKER_00"),
+                    (_FakeTurn(1.5, 3.0), "_", "SPEAKER_01"),
+                ]
+            )
+
+    monkeypatch.setattr(
+        "prepreplay.steps.diarize._load_pipeline_class", lambda: _FakePipeline
+    )
+    return _FakePipeline

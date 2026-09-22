@@ -57,6 +57,12 @@ class TranscriptionError(PrepReplayError):
     stage = "STT"
 
 
+class DiarizationError(PrepReplayError):
+    """pyannote.audio 화자 분리 실패, 토큰 누락, 또는 감지된 화자가 0명일 때."""
+
+    stage = "화자 분리"
+
+
 class FrameExtractionError(PrepReplayError):
     """장면 감지/프레임 추출(ffmpeg) 실패."""
 

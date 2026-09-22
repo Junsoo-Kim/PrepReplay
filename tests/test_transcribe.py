@@ -14,6 +14,7 @@ from typing import Optional
 import pytest
 
 from prepreplay.errors import TranscriptionError
+from prepreplay.steps.diarize import DiarizationSegment
 from prepreplay.steps.transcribe import (
     SEGMENTS_FILENAME,
     SRT_FILENAME,
@@ -208,6 +209,53 @@ def test_transcribe_raises_when_both_devices_fail(
         transcribe_audio(audio_path, output_dir, duration_hint=3.0, force=False)
     assert exc_info.value.stage == "STT"
     assert not (output_dir / SEGMENTS_FILENAME).exists()
+
+
+def test_transcribe_applies_speaker_labels_when_diarization_given(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_loader(monkeypatch)
+    audio_path = tmp_path / "audio.wav"
+    audio_path.write_bytes(b"fake-wav-bytes")
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+
+    diarization_segments = [
+        DiarizationSegment(start=0.0, end=1.5, speaker="화자1"),
+        DiarizationSegment(start=1.5, end=3.0, speaker="화자2"),
+    ]
+
+    result = transcribe_audio(
+        audio_path,
+        output_dir,
+        duration_hint=3.0,
+        diarization_segments=diarization_segments,
+        force=False,
+    )
+
+    assert result.skipped is False
+    data = json.loads((output_dir / SEGMENTS_FILENAME).read_text(encoding="utf-8"))
+    assert data["segments"][0]["text"] == "[화자1] 안녕하세요"
+    assert data["segments"][1]["text"] == "[화자2] 테스트입니다"
+
+    txt_text = (output_dir / TXT_FILENAME).read_text(encoding="utf-8")
+    assert txt_text == "[화자1] 안녕하세요\n[화자2] 테스트입니다"
+
+
+def test_transcribe_without_diarization_segments_leaves_text_unlabeled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_loader(monkeypatch)
+    audio_path = tmp_path / "audio.wav"
+    audio_path.write_bytes(b"fake-wav-bytes")
+    output_dir = tmp_path / "out"
+    output_dir.mkdir()
+
+    result = transcribe_audio(audio_path, output_dir, duration_hint=3.0, force=False)
+
+    assert result.skipped is False
+    data = json.loads((output_dir / SEGMENTS_FILENAME).read_text(encoding="utf-8"))
+    assert data["segments"][0]["text"] == "안녕하세요"
 
 
 def test_transcribe_raises_when_zero_segments(

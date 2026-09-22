@@ -16,3 +16,7 @@ language: ko               # STT 언어 코드 (ko, en, auto 등)
 model: large-v3            # Whisper 모델 크기 (tiny/base/small/medium/large-v3)
 template: null              # 사용자 정의 요약 프롬프트 템플릿 파일 경로. null이면 mode의 내장 템플릿 사용
 force: false                # 캐시된 산출물이 있어도 강제로 재생성할지 여부
+diarize: false              # 화자 분리 활성화 여부 (pip install -e ".[diarization]" 필요)
+diarization_model: pyannote/speaker-diarization-3.1
+# hf_token은 여기 적지 말고 HF_TOKEN 환경변수로 넘기는 것을 권장합니다
+# (config.yaml이 실수로 유출되면 토큰도 같이 새어나가지 않도록).

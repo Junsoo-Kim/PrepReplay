@@ -252,12 +252,53 @@ tests/
 
 ---
 
-### PR #11+ — 선택 확장 (기획서 4.3 / 마일스톤 5단계)
+### PR #11 — 화자 분리 (`feat/diarization`)
+**브랜치**: `feat/diarization`
+
+pyannote.audio로 오디오에서 화자 구간을 감지해, 스크립트의 각 문장 앞에 `[화자1]`/`[화자2]`
+라벨을 붙인다. 컨설팅/스터디 복기에서 "누가 무슨 말을 했는지"가 중요해서 우선순위 1순위로
+선택했다.
+
+- 새 선택 의존성 `pip install -e ".[diarization]"` (`pyannote.audio>=3.1`) — torch 기반이라
+  용량이 크고, GPU/CPU 모두 없어도 되는 다른 단계와 달리 무겁기 때문에 기본 의존성에서
+  분리. `steps/diarize.py`는 whisper 로더(`_load_whisper_model_class`)와 동일한 지연
+  import 패턴(`_load_pipeline_class`)을 써서, `--diarize`를 안 쓰면 import 자체가 안 된다.
+- 새 단계 `steps/diarize.py::diarize_audio()` — 오디오 추출 직후, STT 이전에 실행되며
+  `diarization.json`(화자별 시작/끝 시각)을 만든다. 기존 6단계와 동일하게
+  `is_cached()`/`state.json` 캐시 규칙을 그대로 따른다(캐시 키: `diarization.json`).
+- **모델은 HuggingFace의 게이트(gated) 모델**이라 사용자가 모델 페이지에서 약관에 동의하고
+  토큰을 발급받아야 한다. 토큰은 `--hf-token` CLI 옵션 또는 `HF_TOKEN`/`HUGGINGFACE_TOKEN`
+  환경변수로 받는다 — `config.yaml`에 평문으로 적는 것은 문서에서 권장하지 않는다(유출 위험).
+- **라벨을 붙이는 지점**: 별도 후처리 단계를 새로 만드는 대신, `transcribe_audio()`가
+  `diarization_segments` 파라미터를 받아 STT 결과를 파일로 쓰기 직전에 각 세그먼트와
+  시간이 가장 많이 겹치는 화자를 찾아 `text` 필드 자체에 `"[화자1] ..."`처럼 라벨을
+  얹는다. 이후 단계(`index.py`, `summary_prompt.py`, `split.py`)는 세그먼트의 `text`를
+  그대로 쓰므로, **이 방식 덕분에 다른 어떤 모듈도 diarization을 알 필요가 없다** —
+  `index.md`/`summary_prompt.md`/`chunks/*.md`에도 라벨이 자동으로 반영된다.
+- 화자 라벨은 등장 순서대로 `화자1`, `화자2`, ... 번호만 매겨진다. 실제 화자 이름과의
+  매핑은 스크립트를 보고 사람이 판단해야 한다(이번 PR 범위 밖).
+- 테스트는 `pyannote.audio` 실제 설치/토큰/모델 없이, whisper와 동일하게 `Pipeline`
+  로더를 가짜로 교체해 결정론적으로 검증한다(`tests/test_diarize.py`,
+  `tests/test_diarization_e2e.py`, `conftest.py`의 `fake_diarization_pipeline`).
+  **실제 pyannote 모델로 GPU 실측 검증은 하지 못했다** — HuggingFace 토큰 발급과 게이트
+  모델 약관 동의가 사용자 계정에 종속된 작업이라 이 저장소 작업만으로는 불가능하기
+  때문이다. 사용자가 직접 토큰을 준비해 실제 다중 화자 영상으로 한 번 확인해보는 것을
+  권장한다.
+
+**DoD**: `--diarize` 없이 실행하면 기존과 동일하게 라벨 없는 스크립트가 나오고,
+`--diarize --hf-token <token>`으로 실행하면 `diarization.json`이 생기고
+`segments.json`/`transcript.srt`/`transcript.txt`/`index.md`의 문장 앞에 화자 라벨이
+붙는다. 토큰이 없으면 조치 방법을 알려주는 에러로 즉시 실패한다.
+
+> 기획서 **마일스톤 5단계(선택 확장)** 진행 중.
+
+---
+
+### PR #12+ — 선택 확장 (기획서 4.3 / 마일스톤 5단계)
 각각 독립 PR로. 우선순위 순:
 
-1. `feat/diarization` — pyannote.audio 화자 분리, `[화자1]` 라벨 삽입 (컨설팅/스터디 복기 가치 큼, 단 HuggingFace 토큰 필요)
-2. `feat/obsidian-export` — Obsidian vault 포맷 export
-3. `feat/frame-dedup` — 유사 프레임 제거로 이미지 수 압축
+1. `feat/obsidian-export` — Obsidian vault 포맷 export
+2. `feat/frame-dedup` — 유사 프레임 제거로 이미지 수 압축
 
 ---
 
@@ -267,10 +308,12 @@ tests/
 #1 init
  └─ #2 CLI/설정/doctor
      ├─ #3 오디오 ──▶ #4 STT ──┐
-     └─ #5 프레임 ─────────────┴─▶ #6 index ─▶ #7 프롬프트 ─▶ #8 분할 ─▶ #9 안정화 ─▶ #10 배치 처리
+     └─ #5 프레임 ─────────────┴─▶ #6 index ─▶ #7 프롬프트 ─▶ #8 분할 ─▶ #9 안정화 ─▶ #10 배치 처리 ─▶ #11 화자 분리
 ```
 `#3/#4`(오디오·STT 라인)와 `#5`(프레임 라인)는 서로 독립이라 병렬 작업 가능. `#6`이 둘을 합치는 지점이므로 `segments.json` / `frames.json` 스키마를 `#4`, `#5`에서 확정해 둔다.
 `#10`은 `#9`의 `state.json`(영상별 재개 상태)에 기대므로 `#9` 완료 후 진행한다.
+`#11`은 `#4`가 만든 `segments.json` 쓰기 직전 지점에 개입하므로 `#4` 완료 후 아무 때나 진행
+가능하지만, `state.json` 캐시 규칙(`#9`)을 그대로 재사용하므로 `#9` 이후로 배치했다.
 
 ## 4. 공통 규칙
 

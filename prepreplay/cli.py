@@ -23,6 +23,7 @@ from prepreplay.errors import DependencyError, InputValidationError, PrepReplayE
 from prepreplay.logging_setup import configure_logging
 from prepreplay.state import is_stage_complete, mark_stage_complete
 from prepreplay.steps.audio import extract_audio
+from prepreplay.steps.diarize import diarize_audio
 from prepreplay.steps.frames import extract_frames
 from prepreplay.steps.index import generate_index
 from prepreplay.steps.split import (
@@ -203,6 +204,36 @@ def _run_single_video(
         )
     mark_stage_complete(output_dir, "audio")
 
+    diarization_segments = None
+    if cfg.diarize:
+        stage_start = time.perf_counter()
+        diarize_result = diarize_audio(
+            audio_result.path,
+            output_dir,
+            model_name=cfg.diarization_model,
+            hf_token=cfg.hf_token,
+            force=_stage_force("diarize"),
+            console=active_console,
+        )
+        diarization_segments = diarize_result.segments
+        if diarize_result.skipped:
+            active_console.print(
+                f"[dim]화자 분리 스킵 (캐시됨): {diarize_result.path} (--force로 재생성 가능)[/dim]"
+            )
+            logger.info("[화자 분리] 스킵 (캐시됨): %s", diarize_result.path)
+        else:
+            speaker_count = len({s.speaker for s in diarize_result.segments})
+            active_console.print(
+                f"[green]화자 분리 완료[/green] ({speaker_count}명 감지): {diarize_result.path}"
+            )
+            logger.info(
+                "[화자 분리] 완료 (%.1fs, %d명 감지): %s",
+                time.perf_counter() - stage_start,
+                speaker_count,
+                diarize_result.path,
+            )
+        mark_stage_complete(output_dir, "diarize")
+
     stage_start = time.perf_counter()
     transcript_result = transcribe_audio(
         audio_result.path,
@@ -210,6 +241,7 @@ def _run_single_video(
         model_size=cfg.model,
         language=cfg.language,
         duration_hint=info.duration_seconds,
+        diarization_segments=diarization_segments,
         force=_stage_force("transcribe"),
         console=active_console,
     )
@@ -387,6 +419,21 @@ def run(
     config_path: Optional[Path] = typer.Option(
         None, "--config", help="설정 파일 경로. 기본: ./config.yaml (있는 경우)"
     ),
+    diarize: Optional[bool] = typer.Option(
+        None,
+        "--diarize/--no-diarize",
+        help="화자 분리 활성화 (pyannote.audio 필요: pip install -e \".[diarization]\", HF 토큰 필요)",
+    ),
+    hf_token: Optional[str] = typer.Option(
+        None,
+        "--hf-token",
+        help="화자 분리용 HuggingFace 토큰. 기본: HF_TOKEN 환경변수",
+    ),
+    diarization_model: Optional[str] = typer.Option(
+        None,
+        "--diarization-model",
+        help="화자 분리 모델. 기본: pyannote/speaker-diarization-3.1",
+    ),
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="상세 로그를 stderr에도 함께 출력합니다."
     ),
@@ -422,6 +469,9 @@ def run(
                 "model": model,
                 "template": template_path,
                 "force": force,
+                "diarize": diarize,
+                "hf_token": hf_token,
+                "diarization_model": diarization_model,
             },
         )
 

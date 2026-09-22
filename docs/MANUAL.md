@@ -14,6 +14,7 @@ python -m venv .venv
 
 pip install -e .              # 기본 설치 (CPU로 동작)
 pip install -e ".[gpu]"       # GPU(NVIDIA) 가속용 CUDA 런타임까지 함께 설치
+pip install -e ".[diarization]"  # 화자 분리(--diarize)용 pyannote.audio까지 함께 설치
 pip install -e ".[dev]"       # 개발용 (pytest 포함)
 ```
 
@@ -70,6 +71,9 @@ ffmpeg/ffprobe/GPU/디스크 여유공간을 점검한다. 필수 도구(ffmpeg/
 | `--config` | `./config.yaml` (있으면) | 설정 파일 경로 직접 지정 |
 | `--verbose` / `-v` | 꺼짐 | 상세 로그를 stderr에도 함께 출력 (`run.log`에는 항상 기록됨) |
 | `--quiet` / `-q` | 꺼짐 | 진행 상황 출력을 억제 (에러는 계속 출력됨). `--verbose`와 동시 사용 불가 |
+| `--diarize` / `--no-diarize` | 꺼짐 | 화자 분리 활성화. `pip install -e ".[diarization]"` + HuggingFace 토큰 필요 (7-1절 참고) |
+| `--hf-token` | (없음) | 화자 분리용 HuggingFace 토큰. 기본: `HF_TOKEN` 환경변수 |
+| `--diarization-model` | `pyannote/speaker-diarization-3.1` | 화자 분리에 쓸 pyannote 모델 |
 
 **옵션 우선순위**: CLI 옵션(명시적으로 지정한 것) > `config.yaml` > 내장 기본값.
 
@@ -92,6 +96,9 @@ prepreplay run ~/videos/mystery.mp4 --template ./my_prompt.md
 
 # 강의 시리즈 디렉터리를 통째로 일괄 처리 (파일명순, 하나 실패해도 나머지는 계속)
 prepreplay run ~/videos/algo_lecture_series/ --mode lecture
+
+# 화자 분리 (컨설팅처럼 여러 명이 대화하는 영상에서 "누가 말했는지" 구분)
+prepreplay run ~/videos/consulting_0921.mp4 --mode consulting --diarize
 ```
 
 ---
@@ -115,10 +122,15 @@ language: ko
 model: large-v3
 template: null
 force: false
+diarize: false
+diarization_model: pyannote/speaker-diarization-3.1
 ```
 
 CLI에서 옵션을 따로 안 주면 이 값들이 쓰인다. CLI로 값을 주면 그 값이 이긴다.
 `config.yaml`은 개인 로컬 설정이라 `.gitignore`에 이미 제외되어 있다.
+
+`hf_token`도 `config.yaml`에 키로 쓸 수 있지만 권장하지 않는다 — `config.yaml`이 실수로
+유출되면 토큰도 같이 새어나간다. `HF_TOKEN` 환경변수를 쓰는 것을 권장한다.
 
 ---
 
@@ -136,11 +148,16 @@ output/{영상파일명}/
 ├── summary_prompt.md     # ★ 이걸 복사해서 Claude에 붙여넣으면 됨
 ├── state.json             # 재개(resume)용 단계별 완료 상태 (안 봐도 됨, 커밋 금지)
 ├── run.log                # 실행 단계별 로그 (문제 생겼을 때 확인, 커밋 금지)
+├── diarization.json        # --diarize 지정 시에만 생성: 화자별 발화 구간
 └── chunks/                # --split 지정 시에만 생성
     ├── manifest.json
     ├── part_01_000m-010m.md   # 구간별로 독립된 요약 프롬프트
     └── ...
 ```
+
+`--diarize`를 쓰면 `transcript.srt`/`transcript.txt`/`segments.json`의 각 문장 앞에
+`[화자1]`, `[화자2]`처럼 라벨이 붙고, 이게 `index.md`/`summary_prompt.md`에도 그대로
+반영된다(별도 처리 없이 스크립트 텍스트 자체에 라벨이 포함되기 때문).
 
 디렉터리를 넘겨 여러 영상을 일괄 처리하면, 위 구조가 영상마다 각각의
 `output/{영상파일명}/`에 독립적으로 생긴다.
@@ -172,8 +189,10 @@ prepreplay run video.mp4 --mode consulting
 prepreplay run video.mp4 --mode consulting --force
 ```
 
-`--scene-threshold`나 `--model`처럼 이전 단계의 산출물에 영향을 주는 옵션을 바꿨다면
-`--force`를 꼭 같이 써야 한다 (그렇지 않으면 예전 값으로 만든 결과가 그대로 재사용된다).
+`--scene-threshold`나 `--model`, `--diarize`처럼 이전 단계의 산출물에 영향을 주는 옵션을
+바꿨다면 `--force`를 꼭 같이 써야 한다 (그렇지 않으면 예전 값으로 만든 결과가 그대로
+재사용된다). 특히 `--diarize`를 켜기 전에 이미 STT를 돌린 적이 있다면, `segments.json`이
+이미 있어서 STT 단계가 스킵되고 화자 라벨이 안 붙을 수 있다 — `--force`로 다시 돌리자.
 
 **중단 후 재개**: 이 스킵 여부는 파일이 있는지만 보는 게 아니라 `state.json`의 완료
 마커도 함께 확인한다. STT 도중 Ctrl+C로 중단하거나 크래시가 나면 그 단계는 완료로
@@ -202,6 +221,34 @@ prepreplay run video.mp4 --mode consulting --force
 
 지시문을 직접 쓰고 싶으면 `.md` 파일 하나 만들어서 `--template 경로`로 넘기면 된다.
 (`prepreplay/templates/*.md`를 참고해서 비슷한 톤으로 쓰면 무난하다.)
+
+---
+
+## 7-1. 화자 분리 (`--diarize`)
+
+컨설팅/스터디 복기처럼 여러 명이 대화하는 영상에서 "누가 무슨 말을 했는지" 구분하고
+싶을 때 쓴다. [pyannote.audio](https://github.com/pyannote/pyannote-audio)로 화자 구간을
+감지해, 스크립트의 각 문장 앞에 `[화자1]`, `[화자2]` 라벨을 붙인다.
+
+**준비 (한 번만 하면 됨)**
+1. `pip install -e ".[diarization]"`로 pyannote.audio 설치 (torch 포함이라 용량이 큼)
+2. [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
+   페이지에서 모델 사용 약관에 동의 (HuggingFace 로그인 필요)
+3. [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)에서 토큰 발급
+4. `export HF_TOKEN=hf_xxxx...` (또는 실행마다 `--hf-token`으로 직접 넘겨도 됨)
+
+```bash
+prepreplay run ~/videos/consulting_0921.mp4 --mode consulting --diarize
+```
+
+**알아둘 점**
+- 화자 라벨(`화자1`, `화자2`, ...)은 **등장 순서대로 번호가 매겨질 뿐, 실제 이름과
+  매핑되지 않는다.** 누가 화자1인지는 스크립트 앞부분을 보고 직접 확인해야 한다.
+- 화자 분리는 STT와 별개로 오디오를 한 번 더 분석하므로 처리 시간이 늘어난다.
+- 게이트된 모델이라 토큰이 없거나 약관에 동의하지 않았으면 `[화자 분리] 실패`와 함께
+  안내 메시지가 뜬다.
+- `diarization.json`에 원본 화자 구간(시작/끝 시각)이 남아있으니, 라벨링이 이상하면
+  이 파일을 직접 확인해도 된다.
 
 ---
 
@@ -237,7 +284,20 @@ prepreplay run video.mp4 --mode consulting --force
 **설정 파일 오류(`ConfigError`)**
 → `config.yaml`의 들여쓰기/키 이름을 확인. 허용된 키는 `config.example.yaml`에 있는 것들
   (`mode`, `output`, `scene_threshold`, `max_frames`, `split`, `language`, `model`,
-  `template`, `force`)뿐이며 오타가 있으면 에러 메시지에 허용된 목록이 함께 뜬다.
+  `template`, `force`, `diarize`, `hf_token`, `diarization_model`)뿐이며 오타가 있으면
+  에러 메시지에 허용된 목록이 함께 뜬다.
+
+**"화자 분리를 사용하려면 HuggingFace 토큰이 필요합니다"**
+→ `HF_TOKEN` 환경변수를 설정하지 않았거나 `--hf-token`을 안 줬다는 뜻. 7-1절의 준비 과정을
+  따라 토큰을 발급받아 넘긴다.
+
+**"화자 분리 모델을 불러오지 못했습니다"**
+→ 대개 (1) [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
+  모델 사용 약관에 아직 동의하지 않았거나, (2) 토큰 권한이 부족하거나, (3) 인터넷 연결
+  문제다. 페이지에서 약관 동의 여부를 다시 확인한다.
+
+**`pyannote.audio가 설치되어 있지 않습니다`**
+→ `pip install -e ".[diarization]"`을 실행했는지 확인.
 
 **디렉터리로 일괄 처리했는데 종료 코드가 1로 나옴**
 → 정상 동작이다. 배치 중 하나라도 실패한 영상이 있으면 전체 종료 코드가 1이 된다(스크립트에서
