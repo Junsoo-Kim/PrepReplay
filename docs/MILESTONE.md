@@ -3,7 +3,7 @@
 PrepReplay의 진행 현황을 추적하는 문서. 원래 계획은 [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md),
 배경/설계는 [PROPOSAL.md](PROPOSAL.md) 참고. 이 문서는 "지금 어디까지 됐고, 다음은 뭔지"만 담는다.
 
-마지막 갱신: 2026-09-22 (PR #10 머지 직후)
+마지막 갱신: 2026-09-22 (PR #11 머지 직후)
 
 ---
 
@@ -11,11 +11,11 @@ PrepReplay의 진행 현황을 추적하는 문서. 원래 계획은 [DEVELOPMEN
 
 | 항목 | 상태 |
 |---|---|
-| 현재 버전 | `v1.1.0` (태그) |
+| 현재 버전 | `v1.2.0` (태그) |
 | 핵심 파이프라인 | ✅ 완주 (오디오 추출 → STT → 프레임 추출 → index.md → summary_prompt.md) |
-| 머지된 PR | #1 ~ #10 (총 10개) |
-| 테스트 | 111 passed (`pytest -q`) |
-| 다음 목표 | PR #11 화자 분리 (`feat/diarization`) |
+| 머지된 PR | #1 ~ #11 (총 11개) |
+| 테스트 | 123 passed (`pytest -q`) |
+| 다음 목표 | PR #12 Obsidian export (`feat/obsidian-export`) |
 
 ---
 
@@ -25,11 +25,11 @@ PrepReplay의 진행 현황을 추적하는 문서. 원래 계획은 [DEVELOPMEN
 #1 초기화
  └─ #2 CLI/설정/doctor
      ├─ #3 오디오 ──▶ #4 STT ──┐
-     └─ #5 프레임 ─────────────┴─▶ #6 index ─▶ #7 프롬프트 ─▶ #8 분할 ─▶ #9 안정화 ─▶ #10 배치 처리
-                                                                                          │
-                                                                                   #11+ 선택 확장
-                                                                            (화자 분리 / Obsidian export /
-                                                                             프레임 중복 제거)
+     └─ #5 프레임 ─────────────┴─▶ #6 index ─▶ #7 프롬프트 ─▶ #8 분할 ─▶ #9 안정화 ─▶ #10 배치 처리 ─▶ #11 화자 분리
+                                                                                                          │
+                                                                                                   #12+ 선택 확장
+                                                                                            (Obsidian export /
+                                                                                             프레임 중복 제거)
 ```
 
 기획서 마일스톤 기준:
@@ -37,7 +37,8 @@ PrepReplay의 진행 현황을 추적하는 문서. 원래 계획은 [DEVELOPMEN
 2. **2단계**: 장면 감지 기반 프레임 추출 — PR #5에서 완료
 3. **3단계**: index.md + summary_prompt.md — PR #6~#7에서 완료, `v0.1.0` 태그
 4. **4단계**: 구간 분할, 편의 기능 — PR #8~#9 완료, `v1.0.0` 태그
-5. **5단계(선택)**: 배치 처리 — PR #10 완료, `v1.1.0` 태그. 화자 분리 등 나머지는 PR #11부터
+5. **5단계(선택)**: 배치 처리 — PR #10 완료(`v1.1.0`), 화자 분리 — PR #11 완료(`v1.2.0`).
+   Obsidian export/프레임 중복 제거는 PR #12부터
 
 ---
 
@@ -111,6 +112,22 @@ faster-whisper로 `segments.json`/`transcript.srt`/`transcript.txt` 생성. GPU 
 > 다시 처리하지 않는다"는 동작을 추가 구현 없이 그대로 얻었다 — `tests/test_batch.py`의
 > `test_run_batch_resumes_only_failed_video_after_fix`로 검증.
 
+### PR #11 — 화자 분리 (`feat/diarization`)
+`--diarize`로 pyannote.audio 기반 화자 분리를 켤 수 있다. 오디오 추출 직후 화자 구간을
+감지해 `diarization.json`으로 저장하고, STT 세그먼트 텍스트 앞에 `[화자1]`/`[화자2]` 라벨을
+붙인다. `pyannote.audio`는 무거운 선택 의존성(`pip install -e ".[diarization]"`)으로 분리,
+게이트된 HuggingFace 모델이라 `--hf-token`/`HF_TOKEN`으로 토큰을 받는다. 다른 단계와 동일한
+`state.json` 캐시 규칙을 그대로 재사용. **기획서 마일스톤 5단계(선택 확장) 계속, `v1.2.0` 태그.**
+
+> 설계 포인트: 라벨을 별도 필드가 아니라 세그먼트 `text` 자체에 `"[화자1] ..."`로 얹는
+> 방식을 택해, `index.py`/`summary_prompt.py`/`split.py`가 diarization을 전혀 몰라도 라벨이
+> 자동으로 전파되게 했다.
+>
+> 검증 한계: 게이트된 실제 pyannote 모델(HuggingFace 토큰 + 약관 동의 필요)로는 이 저장소
+> 작업만으로 실측 검증을 할 수 없었다. whisper STT와 동일한 방식으로 모델 로더를 가짜로
+> 교체해 로직만 결정론적으로 검증했다(`tests/test_diarize.py`). 실제 다중 화자 영상으로의
+> 확인은 사용자가 HF 토큰을 준비해 직접 해봐야 한다(MANUAL.md 7-1절).
+
 ---
 
 ## 검증 방식
@@ -125,18 +142,19 @@ faster-whisper로 `segments.json`/`transcript.srt`/`transcript.txt` 생성. GPU 
 
 ## 앞으로 할 일
 
-### PR #11 — 화자 분리 (`feat/diarization`, 다음 작업)
-pyannote.audio로 화자 분리, 스크립트에 `[화자1]`/`[화자2]` 라벨 삽입. 컨설팅/스터디 복기에서
-"누가 무슨 말을 했는지"가 중요해서 가치가 크지만, HuggingFace 토큰 발급 및 모델 사용 동의가
-필요해 README/MANUAL에 별도 설정 안내를 추가해야 한다.
+### PR #12 — Obsidian export (`feat/obsidian-export`, 다음 작업)
+`index.md`/`summary_prompt.md` 결과물을 Obsidian vault 포맷(프런트매터, 위키링크 등)으로
+바로 export하는 옵션. 아직 상세 설계는 안 함 — 착수 시 DEVELOPMENT_PLAN.md에 PR #10/#11과
+같은 형식으로 상세 계획을 추가할 것.
 
-### PR #12+ — 선택 확장 (기획서 4.3절, 우선순위 순)
-1. `feat/obsidian-export` — Obsidian vault 포맷 export
-2. `feat/frame-dedup` — 유사 프레임 제거로 이미지 수 압축
+### PR #13+ — 선택 확장 (기획서 4.3절, 우선순위 순)
+1. `feat/frame-dedup` — 유사 프레임 제거로 이미지 수 압축
 
 ### 아직 손대지 않은 기획서 항목
 - 실제 사용자 영상(취업 컨설팅/설명회/강의/면접 녹화)으로의 실전 검증 — 지금까지는 합성
   영상 + TTS 음성으로만 검증했다. 실제 영상 1개 이상으로 기획서 10절 완료 기준을 다시
   확인하는 것을 권장.
+- 화자 분리(PR #11)의 실제 pyannote 모델 검증 — HuggingFace 토큰이 필요해 사용자가 직접
+  해야 한다(자동화 테스트는 가짜 모델로만 검증됨).
 - 개인정보 처리 관련 추가 안내(README에 기본 경고는 있으나, 컨설팅 세션처럼 민감한 내용을
   다룰 때의 구체적 운영 가이드는 아직 없음)
