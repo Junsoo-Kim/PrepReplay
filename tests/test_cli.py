@@ -57,7 +57,7 @@ def test_run_rejects_missing_file() -> None:
 
 @requires_ffmpeg
 def test_run_end_to_end_creates_output_dir_and_prints_metadata(
-    tmp_path: Path, sample_video: Path
+    tmp_path: Path, sample_video: Path, fake_whisper_model
 ) -> None:
     output_root = tmp_path / "out"
     result = runner.invoke(
@@ -67,9 +67,13 @@ def test_run_end_to_end_creates_output_dir_and_prints_metadata(
     assert result.exit_code == 0, result.output
     assert "영상 메타데이터" in result.output
     assert "오디오 추출 완료" in result.output
+    assert "STT 완료" in result.output
     expected_dir = output_root / sample_video.stem
     assert expected_dir.is_dir()
     assert (expected_dir / "audio.wav").is_file()
+    assert (expected_dir / "transcript.srt").is_file()
+    assert (expected_dir / "transcript.txt").is_file()
+    assert (expected_dir / "segments.json").is_file()
 
 
 @requires_ffmpeg

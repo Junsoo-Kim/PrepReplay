@@ -18,6 +18,7 @@ from prepreplay.config import (
 )
 from prepreplay.errors import DependencyError, InputValidationError, PrepReplayError
 from prepreplay.steps.audio import extract_audio
+from prepreplay.steps.transcribe import transcribe_audio
 from prepreplay.utils.ffmpeg import find_ffmpeg, find_ffprobe, get_version, probe_video
 from prepreplay.utils.gpu import detect_gpu
 
@@ -138,8 +139,8 @@ def run(
 ) -> None:
     """영상을 분석하여 output/{video_name}/ 에 결과물을 생성합니다.
 
-    이 시점(PR #3)에서는 입력 검증, 영상 메타데이터 확인, 오디오 추출까지 동작합니다.
-    STT/프레임 추출은 PR #4~#5에서 추가됩니다.
+    이 시점(PR #4)에서는 입력 검증, 영상 메타데이터 확인, 오디오 추출, STT까지
+    동작합니다. 프레임 추출은 PR #5에서 추가됩니다.
     """
     try:
         cfg = resolve_config(
@@ -197,13 +198,33 @@ def run(
         else:
             console.print(f"[green]오디오 추출 완료:[/green] {audio_result.path}")
 
+        transcript_result = transcribe_audio(
+            audio_result.path,
+            output_dir,
+            model_size=cfg.model,
+            language=cfg.language,
+            duration_hint=info.duration_seconds,
+            force=cfg.force,
+            console=console,
+        )
+        if transcript_result.skipped:
+            console.print(
+                f"[dim]STT 스킵 (캐시됨): {transcript_result.segments_path} (--force로 재생성 가능)[/dim]"
+            )
+        else:
+            console.print(
+                f"[green]STT 완료[/green] (device={transcript_result.device}, "
+                f"language={transcript_result.language}): "
+                f"{transcript_result.srt_path.name}, {transcript_result.txt_path.name}, "
+                f"{transcript_result.segments_path.name}"
+            )
+
         console.print(
             f"[bold]적용된 설정:[/bold] mode={cfg.mode}, scene_threshold={cfg.scene_threshold}, "
             f"language={cfg.language}, model={cfg.model}, split={cfg.split or '(없음)'}"
         )
         console.print(
-            "[dim]STT/프레임 추출 파이프라인은 아직 구현되지 않았습니다 "
-            "(PR #4~#5에서 추가 예정).[/dim]"
+            "[dim]프레임 추출 파이프라인은 아직 구현되지 않았습니다 (PR #5에서 추가 예정).[/dim]"
         )
 
     except PrepReplayError as exc:

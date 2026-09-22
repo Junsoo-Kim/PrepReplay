@@ -58,3 +58,39 @@ def silent_video(tmp_path: Path) -> Path:
         timeout=60,
     )
     return out
+
+
+@pytest.fixture
+def fake_whisper_model(monkeypatch: pytest.MonkeyPatch):
+    """실제 Whisper 모델 다운로드/추론 없이 STT 관련 테스트를 빠르고 결정론적으로 만든다.
+
+    prepreplay.steps.transcribe._load_whisper_model_class를 가짜 모델 클래스로
+    교체한다. CLI/파이프라인 결합 테스트에서 사용.
+    """
+
+    class _FakeSegment:
+        def __init__(self, start: float, end: float, text: str) -> None:
+            self.start = start
+            self.end = end
+            self.text = text
+
+    class _FakeInfo:
+        def __init__(self, language: str = "ko") -> None:
+            self.language = language
+            self.duration = 3.0
+
+    class _FakeModel:
+        def __init__(self, model_size: str, device: str, compute_type: str) -> None:
+            pass
+
+        def transcribe(self, audio_path: str, language=None):
+            segments = [
+                _FakeSegment(0.0, 1.5, " 안녕하세요 "),
+                _FakeSegment(1.5, 3.0, " 테스트입니다 "),
+            ]
+            return iter(segments), _FakeInfo(language=language or "ko")
+
+    monkeypatch.setattr(
+        "prepreplay.steps.transcribe._load_whisper_model_class", lambda: _FakeModel
+    )
+    return _FakeModel
