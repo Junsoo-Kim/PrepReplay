@@ -30,11 +30,14 @@ class Config:
     split: Optional[str] = None
     language: str = "ko"
     model: str = "large-v3"
+    template: Optional[Path] = None
     force: bool = False
 
     def __post_init__(self) -> None:
         if isinstance(self.output, str):
             self.output = Path(self.output)
+        if isinstance(self.template, str):
+            self.template = Path(self.template)
 
 
 def load_config_file(path: Optional[Path]) -> dict[str, Any]:

@@ -20,6 +20,7 @@ from prepreplay.errors import DependencyError, InputValidationError, PrepReplayE
 from prepreplay.steps.audio import extract_audio
 from prepreplay.steps.frames import extract_frames
 from prepreplay.steps.index import generate_index
+from prepreplay.steps.summary_prompt import generate_summary_prompt
 from prepreplay.steps.transcribe import transcribe_audio
 from prepreplay.utils.ffmpeg import find_ffmpeg, find_ffprobe, get_version, probe_video
 from prepreplay.utils.gpu import detect_gpu
@@ -138,15 +139,19 @@ def run(
     force: Optional[bool] = typer.Option(
         None, "--force/--no-force", help="캐시된 산출물이 있어도 강제로 재생성"
     ),
+    template_path: Optional[Path] = typer.Option(
+        None,
+        "--template",
+        help="사용자 정의 요약 프롬프트 템플릿 파일 경로 (지정 시 --mode의 내장 템플릿 대신 사용)",
+    ),
     config_path: Optional[Path] = typer.Option(
         None, "--config", help="설정 파일 경로. 기본: ./config.yaml (있는 경우)"
     ),
 ) -> None:
     """영상을 분석하여 output/{video_name}/ 에 결과물을 생성합니다.
 
-    이 시점(PR #6)에서는 입력 검증, 영상 메타데이터 확인, 오디오 추출, STT,
-    프레임 추출, index.md 생성까지 동작합니다. summary_prompt.md 생성은 PR #7에서
-    추가됩니다.
+    입력 검증, 영상 메타데이터 확인, 오디오 추출, STT, 프레임 추출, index.md,
+    summary_prompt.md 생성까지 전체 파이프라인이 동작합니다.
     """
     try:
         cfg = resolve_config(
@@ -159,6 +164,7 @@ def run(
                 "split": split,
                 "language": language,
                 "model": model,
+                "template": template_path,
                 "force": force,
             },
         )
@@ -263,13 +269,29 @@ def run(
                 f"{index_result.path}"
             )
 
+        prompt_result = generate_summary_prompt(
+            output_dir,
+            video_name=video.name,
+            duration_seconds=info.duration_seconds,
+            mode=cfg.mode,
+            template_path=cfg.template,
+            force=cfg.force,
+        )
+        if prompt_result.skipped:
+            console.print(
+                f"[dim]summary_prompt.md 생성 스킵 (캐시됨): {prompt_result.path} "
+                "(--force로 재생성 가능)[/dim]"
+            )
+        else:
+            console.print(
+                f"[green]summary_prompt.md 생성 완료[/green] (mode={prompt_result.mode}): "
+                f"{prompt_result.path}"
+            )
+
         console.print(
             f"[bold]적용된 설정:[/bold] mode={cfg.mode}, scene_threshold={cfg.scene_threshold}, "
             f"max_frames={cfg.max_frames}, language={cfg.language}, model={cfg.model}, "
             f"split={cfg.split or '(없음)'}"
-        )
-        console.print(
-            "[dim]summary_prompt.md 생성은 아직 구현되지 않았습니다 (PR #7에서 추가 예정).[/dim]"
         )
 
     except PrepReplayError as exc:

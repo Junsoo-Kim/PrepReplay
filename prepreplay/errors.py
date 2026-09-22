@@ -67,3 +67,9 @@ class IndexGenerationError(PrepReplayError):
     """segments.json/frames.json을 병합해 index.md를 만드는 과정의 실패."""
 
     stage = "인덱스 생성"
+
+
+class SummaryPromptError(PrepReplayError):
+    """summary_prompt.md 생성 실패 (템플릿 누락, index.md 없음 등)."""
+
+    stage = "요약 프롬프트 생성"
