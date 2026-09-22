@@ -19,6 +19,7 @@ from prepreplay.config import (
 from prepreplay.errors import DependencyError, InputValidationError, PrepReplayError
 from prepreplay.steps.audio import extract_audio
 from prepreplay.steps.frames import extract_frames
+from prepreplay.steps.index import generate_index
 from prepreplay.steps.transcribe import transcribe_audio
 from prepreplay.utils.ffmpeg import find_ffmpeg, find_ffprobe, get_version, probe_video
 from prepreplay.utils.gpu import detect_gpu
@@ -143,8 +144,8 @@ def run(
 ) -> None:
     """영상을 분석하여 output/{video_name}/ 에 결과물을 생성합니다.
 
-    이 시점(PR #5)에서는 입력 검증, 영상 메타데이터 확인, 오디오 추출, STT,
-    프레임 추출까지 동작합니다. index.md/summary_prompt.md 생성은 PR #6~#7에서
+    이 시점(PR #6)에서는 입력 검증, 영상 메타데이터 확인, 오디오 추출, STT,
+    프레임 추출, index.md 생성까지 동작합니다. summary_prompt.md 생성은 PR #7에서
     추가됩니다.
     """
     try:
@@ -246,14 +247,29 @@ def run(
                 f"{frames_result.frames_dir}"
             )
 
+        index_result = generate_index(
+            output_dir,
+            video_name=video.name,
+            duration_seconds=info.duration_seconds,
+            force=cfg.force,
+        )
+        if index_result.skipped:
+            console.print(
+                f"[dim]index.md 생성 스킵 (캐시됨): {index_result.path} (--force로 재생성 가능)[/dim]"
+            )
+        else:
+            console.print(
+                f"[green]index.md 생성 완료[/green] ({index_result.section_count}개 구간): "
+                f"{index_result.path}"
+            )
+
         console.print(
             f"[bold]적용된 설정:[/bold] mode={cfg.mode}, scene_threshold={cfg.scene_threshold}, "
             f"max_frames={cfg.max_frames}, language={cfg.language}, model={cfg.model}, "
             f"split={cfg.split or '(없음)'}"
         )
         console.print(
-            "[dim]index.md/summary_prompt.md 생성은 아직 구현되지 않았습니다 "
-            "(PR #6~#7에서 추가 예정).[/dim]"
+            "[dim]summary_prompt.md 생성은 아직 구현되지 않았습니다 (PR #7에서 추가 예정).[/dim]"
         )
 
     except PrepReplayError as exc:

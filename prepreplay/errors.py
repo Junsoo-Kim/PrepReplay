@@ -61,3 +61,9 @@ class FrameExtractionError(PrepReplayError):
     """장면 감지/프레임 추출(ffmpeg) 실패."""
 
     stage = "프레임 추출"
+
+
+class IndexGenerationError(PrepReplayError):
+    """segments.json/frames.json을 병합해 index.md를 만드는 과정의 실패."""
+
+    stage = "인덱스 생성"
