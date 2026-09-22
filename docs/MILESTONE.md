@@ -3,7 +3,7 @@
 PrepReplay의 진행 현황을 추적하는 문서. 원래 계획은 [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md),
 배경/설계는 [PROPOSAL.md](PROPOSAL.md) 참고. 이 문서는 "지금 어디까지 됐고, 다음은 뭔지"만 담는다.
 
-마지막 갱신: 2026-09-22 (PR #8 머지 직후)
+마지막 갱신: 2026-09-22 (PR #9 머지 직후)
 
 ---
 
@@ -11,11 +11,11 @@ PrepReplay의 진행 현황을 추적하는 문서. 원래 계획은 [DEVELOPMEN
 
 | 항목 | 상태 |
 |---|---|
-| 현재 버전 | `v0.1.0` (태그) |
+| 현재 버전 | `v0.1.0` (태그) — `v1.0.0` 태그는 아직 안 함 |
 | 핵심 파이프라인 | ✅ 완주 (오디오 추출 → STT → 프레임 추출 → index.md → summary_prompt.md) |
-| 머지된 PR | #1 ~ #8 (총 8개) |
-| 테스트 | 82 passed (`pytest -q`) |
-| 다음 목표 | PR #9 안정화 → `v1.0.0` |
+| 머지된 PR | #1 ~ #9 (총 9개) |
+| 테스트 | 106 passed (`pytest -q`) |
+| 다음 목표 | PR #10 배치 처리 |
 
 ---
 
@@ -27,17 +27,19 @@ PrepReplay의 진행 현황을 추적하는 문서. 원래 계획은 [DEVELOPMEN
      ├─ #3 오디오 ──▶ #4 STT ──┐
      └─ #5 프레임 ─────────────┴─▶ #6 index ─▶ #7 프롬프트 ─▶ #8 분할 ─▶ #9 안정화
                                                                             │
-                                                                     #10+ 선택 확장
-                                                              (배치 처리 / 화자 분리 /
-                                                               Obsidian export / 중복 제거)
+                                                                     #10 배치 처리
+                                                                            │
+                                                                     #11+ 선택 확장
+                                                              (화자 분리 / Obsidian export /
+                                                               프레임 중복 제거)
 ```
 
 기획서 마일스톤 기준:
 1. **1단계(MVP)**: 오디오 추출 → STT → 스크립트 저장 — PR #3~#4에서 완료
 2. **2단계**: 장면 감지 기반 프레임 추출 — PR #5에서 완료
 3. **3단계**: index.md + summary_prompt.md — PR #6~#7에서 완료, `v0.1.0` 태그
-4. **4단계**: 구간 분할, 편의 기능 — PR #8 완료, PR #9 진행 중
-5. **5단계(선택)**: 화자 분리, 배치 처리, 지식관리 도구 연동 — 미착수
+4. **4단계**: 구간 분할, 편의 기능 — PR #8~#9 완료 (`v1.0.0` 태그 대기 중)
+5. **5단계(선택)**: 배치 처리, 화자 분리, 지식관리 도구 연동 — PR #10부터 착수
 
 ---
 
@@ -58,7 +60,7 @@ ffmpeg로 16kHz mono 16-bit PCM WAV 추출. **이후 모든 단계가 따르는 
 
 ### PR #4 — Whisper STT (`feat/whisper-transcribe`)
 faster-whisper로 `segments.json`/`transcript.srt`/`transcript.txt` 생성. GPU 우선 시도 →
-로드/추론 실패 시 CPU 자동 전환. **기획서 마일스�트 1단계(MVP) 완료 지점.**
+로드/추론 실패 시 CPU 자동 전환. **기획서 마일스톤 1단계(MVP) 완료 지점.**
 
 > 실측 이슈: Windows에서 CTranslate2가 cuBLAS DLL을 PATH 기반으로 찾는데,
 > `os.add_dll_directory()`는 효과가 없었다 — `nvidia-*-cu12` 패키지의 `bin/` 경로를
@@ -87,6 +89,18 @@ faster-whisper로 `segments.json`/`transcript.srt`/`transcript.txt` 생성. GPU 
 **세그먼트 단위**로 잘라 문장이 구간 경계에서 끊기지 않는다. 30분 초과 영상엔 `--split` 권장
 경고를 띄운다.
 
+### PR #9 — 안정화: 로깅 / 재개 / 에러 힌트 (`chore/robustness`)
+`output/{video}/run.log`에 단계별 실행 기록(`--verbose`로 stderr에도 DEBUG 상세 출력,
+`--quiet`로 진행 메시지 억제), `state.json` 기반 단계별 완료 마커로 중단(Ctrl+C, 크래시) 후
+재실행 시 완료된 단계는 건너뛰고 이어서 진행. ffmpeg/whisper 실패 시 원문 stderr/예외
+문자열 대신 원인별 큐레이션된 한국어 조치 힌트(`prepreplay/diagnostics.py`) 제공. E2E
+테스트(`tests/test_e2e.py`)로 DoD 시나리오(STT 중단 → 재실행 시 오디오 재추출 안 함)를
+자동 검증. **기획서 마일스톤 4단계 완료.**
+
+> 설계 포인트: 파일 존재만으로 캐시를 신뢰하던 기존 `is_cached()`를 건드리지 않고,
+> `cli.py`에서 `state.json`의 완료 마커 유무로 단계별 "유효 force"를 계산하는 방식으로
+> 최소 침습적으로 구현했다 — 기존 단위 테스트 82개가 전부 무수정으로 통과했다.
+
 ---
 
 ## 검증 방식
@@ -101,19 +115,20 @@ faster-whisper로 `segments.json`/`transcript.srt`/`transcript.txt` 생성. GPU 
 
 ## 앞으로 할 일
 
-### PR #9 — 안정화 (`chore/robustness`, 다음 작업)
-- `run.log` 단계별 기록, `--verbose`/`--quiet`
-- 중단 후 재실행 시 완료된 단계는 스킵하고 이어서 진행 (`state.json`)
-- ffmpeg/whisper 실패 원인별 사람이 읽을 수 있는 메시지 + 조치 안내 보강
-- 전체 파이프라인 E2E 테스트 (합성 샘플 영상 fixture로)
-- 완료 시 **`v1.0.0`** 태그 예정
+`v1.0.0` 태그는 아직 안 걸었다 — PR #10 착수 전 별도로 결정.
 
-### PR #10+ — 선택 확장 (기획서 4.3절, 우선순위 순)
-1. `feat/batch-processing` — 디렉터리 입력으로 강의 시리즈 일괄 처리
-2. `feat/diarization` — pyannote.audio 화자 분리 (`[화자1]` 라벨). 컨설팅/스터디 복기에서
+### PR #10 — 배치 처리 (`feat/batch-processing`, 다음 작업)
+상세 계획은 [DEVELOPMENT_PLAN.md의 PR #10 절](DEVELOPMENT_PLAN.md#pr-10--배치-처리-디렉터리-입력) 참고.
+- `prepreplay run <디렉터리>` 형태로 영상 여러 개를 한 번에 처리 (파일 하나짜리 기존 동작은 그대로 유지)
+- 영상 하나가 실패해도 나머지는 계속 처리하고, 끝에 성공/실패 요약을 출력
+- PR #9의 `state.json`/`run.log`가 영상별로 이미 분리돼 있어, 배치 도중 중단돼도 재실행 시
+  이미 끝난 영상은 건너뛴다(추가 구현 없이 자연스럽게 얻는 이점)
+
+### PR #11+ — 선택 확장 (기획서 4.3절, 우선순위 순)
+1. `feat/diarization` — pyannote.audio 화자 분리 (`[화자1]` 라벨). 컨설팅/스터디 복기에서
    가치가 크지만 HuggingFace 토큰이 필요해 별도 설정 문서화가 필요함
-3. `feat/obsidian-export` — Obsidian vault 포맷 export
-4. `feat/frame-dedup` — 유사 프레임 제거로 이미지 수 압축
+2. `feat/obsidian-export` — Obsidian vault 포맷 export
+3. `feat/frame-dedup` — 유사 프레임 제거로 이미지 수 압축
 
 ### 아직 손대지 않은 기획서 항목
 - 실제 사용자 영상(취업 컨설팅/설명회/강의/면접 녹화)으로의 실전 검증 — 지금까지는 합성
