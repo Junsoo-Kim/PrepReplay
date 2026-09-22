@@ -17,6 +17,7 @@ from prepreplay.config import (
     resolve_config,
 )
 from prepreplay.errors import DependencyError, InputValidationError, PrepReplayError
+from prepreplay.steps.audio import extract_audio
 from prepreplay.utils.ffmpeg import find_ffmpeg, find_ffprobe, get_version, probe_video
 from prepreplay.utils.gpu import detect_gpu
 
@@ -137,8 +138,8 @@ def run(
 ) -> None:
     """영상을 분석하여 output/{video_name}/ 에 결과물을 생성합니다.
 
-    이 시점(PR #2)에서는 입력 검증, 영상 메타데이터 확인, 출력 폴더 준비까지만
-    동작합니다. 오디오 추출/STT/프레임 추출은 PR #3~#5에서 추가됩니다.
+    이 시점(PR #3)에서는 입력 검증, 영상 메타데이터 확인, 오디오 추출까지 동작합니다.
+    STT/프레임 추출은 PR #4~#5에서 추가됩니다.
     """
     try:
         cfg = resolve_config(
@@ -185,25 +186,24 @@ def run(
         meta_table.add_row("파일 크기", f"{info.size_bytes / (1024**2):.1f} MB")
         console.print(meta_table)
 
-        if not info.has_audio:
-            console.print(
-                "[yellow]⚠ 오디오 트랙이 없습니다. STT 단계에서 스크립트가 생성되지 않습니다.[/yellow]"
-            )
-
         output_dir = cfg.output / video.stem
-        if output_dir.exists() and not cfg.force:
-            console.print(f"[dim]출력 폴더가 이미 존재합니다: {output_dir} (--force로 재생성 가능)[/dim]")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        audio_result = extract_audio(video, output_dir, info, force=cfg.force, console=console)
+        if audio_result.skipped:
+            console.print(
+                f"[dim]오디오 추출 스킵 (캐시됨): {audio_result.path} (--force로 재생성 가능)[/dim]"
+            )
         else:
-            output_dir.mkdir(parents=True, exist_ok=True)
-            console.print(f"[green]출력 폴더 준비 완료:[/green] {output_dir}")
+            console.print(f"[green]오디오 추출 완료:[/green] {audio_result.path}")
 
         console.print(
             f"[bold]적용된 설정:[/bold] mode={cfg.mode}, scene_threshold={cfg.scene_threshold}, "
             f"language={cfg.language}, model={cfg.model}, split={cfg.split or '(없음)'}"
         )
         console.print(
-            "[dim]오디오 추출/STT/프레임 추출 파이프라인은 아직 구현되지 않았습니다 "
-            "(PR #3~#5에서 추가 예정). 현재는 입력 검증 및 출력 폴더 준비까지만 수행합니다.[/dim]"
+            "[dim]STT/프레임 추출 파이프라인은 아직 구현되지 않았습니다 "
+            "(PR #4~#5에서 추가 예정).[/dim]"
         )
 
     except PrepReplayError as exc:
