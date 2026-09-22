@@ -46,8 +46,10 @@ pip install -e ".[gpu]"
 동작합니다. 각 실행은 `output/{video_name}/run.log`에 단계별 로그를 남기고,
 `output/{video_name}/state.json`으로 완료된 단계를 추적합니다 — 중단(Ctrl+C, 크래시)
 후 `prepreplay run`을 그대로 다시 실행하면 완료된 단계는 건너뛰고 중단된 단계부터
-이어서 진행합니다. 화자 분리 등 그 밖의 편의 기능은 아직 없으며,
-[docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)의 PR 로드맵에 따라 계속 추가됩니다.
+이어서 진행합니다. `run`에 영상 파일 대신 디렉터리를 넘기면 그 안의 영상들을 파일명순으로
+일괄 처리합니다 — 하나가 실패해도 나머지는 계속 처리되고, 끝에 성공/실패 요약이 나옵니다.
+화자 분리 등 그 밖의 편의 기능은 아직 없으며, [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)의
+PR 로드맵에 따라 계속 추가됩니다.
 
 ```bash
 prepreplay --version
@@ -72,6 +74,9 @@ prepreplay run ~/videos/lecture_algo.mp4 --verbose
 
 # 진행 상황 출력을 억제 (에러는 계속 출력됨)
 prepreplay run ~/videos/lecture_algo.mp4 --quiet
+
+# 디렉터리를 넘기면 안의 영상들을 파일명순으로 일괄 처리 (하나가 실패해도 나머지는 계속 진행)
+prepreplay run ~/videos/lecture_series/ --mode lecture
 
 # 환경 진단 (ffmpeg/CUDA 등 확인)
 prepreplay doctor

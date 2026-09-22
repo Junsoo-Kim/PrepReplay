@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "prepreplay"
-version = "1.0.0"
+version = "1.1.0"
 description = "로컬 영상(컨설팅/설명회/강의/면접 녹화)을 스크립트+프레임으로 분해해 Claude에 붙여넣을 수 있게 만드는 CLI 도구"
 readme = "README.md"
 requires-python = ">=3.10"
