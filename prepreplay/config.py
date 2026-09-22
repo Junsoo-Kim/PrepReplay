@@ -26,6 +26,7 @@ class Config:
     mode: str = "default"
     output: Path = Path("output")
     scene_threshold: float = 0.3
+    max_frames: int = 200
     split: Optional[str] = None
     language: str = "ko"
     model: str = "large-v3"

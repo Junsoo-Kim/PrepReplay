@@ -55,3 +55,9 @@ class TranscriptionError(PrepReplayError):
     """Whisper STT 실패, 또는 인식된 세그먼트가 0개일 때."""
 
     stage = "STT"
+
+
+class FrameExtractionError(PrepReplayError):
+    """장면 감지/프레임 추출(ffmpeg) 실패."""
+
+    stage = "프레임 추출"
