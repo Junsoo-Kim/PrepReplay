@@ -15,9 +15,16 @@ dependencies = [
     "typer>=0.12",
     "rich>=13.7",
     "pyyaml>=6.0",
+    "faster-whisper>=1.0",
 ]
 
 [project.optional-dependencies]
+# GPU 가속용 CUDA 런타임 라이브러리. 용량이 크고(수백MB~1GB+) GPU가 없으면
+# 필요 없으므로 기본 의존성에서 분리한다. 없어도 CPU 모드로 정상 동작한다.
+gpu = [
+    "nvidia-cublas-cu12>=12.0",
+    "nvidia-cudnn-cu12>=9.0",
+]
 dev = [
     "pytest>=8.0",
 ]

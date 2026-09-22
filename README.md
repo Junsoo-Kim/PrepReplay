@@ -17,8 +17,8 @@
   - Linux: 배포판 패키지 매니저 사용 (`apt install ffmpeg` 등)
 - **Python 3.10 이상**
 
-GPU(NVIDIA)가 있으면 음성 인식(faster-whisper) 속도가 크게 빨라집니다. 없어도 CPU로 동작합니다
-(속도는 영상 길이의 1~2배 예상).
+GPU(NVIDIA)가 있으면 음성 인식(faster-whisper) 속도가 크게 빨라집니다. 없어도 CPU로 자동
+전환되어 동작합니다 (속도는 영상 길이의 1~2배 예상).
 
 ## 설치
 
@@ -28,6 +28,9 @@ python -m venv .venv
 # macOS/Linux: source .venv/bin/activate
 
 pip install -e .
+
+# GPU(NVIDIA)를 사용하려면 CUDA 런타임 라이브러리도 함께 설치
+pip install -e ".[gpu]"
 ```
 
 ## 사용법

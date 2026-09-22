@@ -49,3 +49,9 @@ class AudioExtractionError(PrepReplayError):
     """오디오 트랙 추출(ffmpeg) 실패, 또는 오디오 트랙이 아예 없을 때."""
 
     stage = "오디오 추출"
+
+
+class TranscriptionError(PrepReplayError):
+    """Whisper STT 실패, 또는 인식된 세그먼트가 0개일 때."""
+
+    stage = "STT"
