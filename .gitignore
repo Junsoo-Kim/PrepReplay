@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# venv
+.venv/
+venv/
+
+# 산출물 - 개인 영상/음성 데이터가 포함되므로 절대 커밋 금지
+output/
+*.mp4
+*.mov
+*.mkv
+*.avi
+*.webm
+*.wav
+*.srt
+
+# 모델 캐시
+.cache/
+models/
+
+# 상태/로그
+state.json
+run.log
+*.log
+
+# 에디터/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 테스트
+.pytest_cache/
+.coverage
+htmlcov/
