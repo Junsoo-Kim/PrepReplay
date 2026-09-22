@@ -16,6 +16,7 @@ from typing import Optional
 from rich.console import Console
 from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
 
+from prepreplay.diagnostics import diagnose_failure
 from prepreplay.errors import AudioExtractionError, DependencyError
 from prepreplay.pipeline import is_cached
 from prepreplay.utils.ffmpeg import VideoInfo, find_ffmpeg
@@ -131,7 +132,7 @@ def extract_audio(
         if audio_path.exists():
             audio_path.unlink(missing_ok=True)
         stderr_text = "".join(stderr_lines).strip()
-        hint = stderr_text.splitlines()[-1] if stderr_text else None
+        hint = diagnose_failure(stderr_text) or (stderr_text.splitlines()[-1] if stderr_text else None)
         raise AudioExtractionError(f"오디오 추출에 실패했습니다: {video}", hint=hint)
 
     return AudioExtractionResult(path=audio_path, skipped=False)

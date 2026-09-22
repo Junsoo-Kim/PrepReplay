@@ -20,6 +20,7 @@ from typing import Any, Optional
 from rich.console import Console
 from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
 
+from prepreplay.diagnostics import diagnose_failure
 from prepreplay.errors import DependencyError, TranscriptionError
 from prepreplay.pipeline import is_cached
 from prepreplay.utils.cuda_env import ensure_cuda_libs_discoverable
@@ -183,8 +184,9 @@ def transcribe_audio(
                 model, audio_path, language=language, duration=duration_hint, console=console
             )
         except Exception as cpu_exc:
+            hint = diagnose_failure(str(cpu_exc)) or str(cpu_exc)
             raise TranscriptionError(
-                f"STT에 실패했습니다: {audio_path}", hint=str(cpu_exc)
+                f"STT에 실패했습니다: {audio_path}", hint=hint
             ) from cpu_exc
 
     if not segments:
