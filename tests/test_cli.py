@@ -68,12 +68,15 @@ def test_run_end_to_end_creates_output_dir_and_prints_metadata(
     assert "영상 메타데이터" in result.output
     assert "오디오 추출 완료" in result.output
     assert "STT 완료" in result.output
+    assert "프레임 추출 완료" in result.output
     expected_dir = output_root / sample_video.stem
     assert expected_dir.is_dir()
     assert (expected_dir / "audio.wav").is_file()
     assert (expected_dir / "transcript.srt").is_file()
     assert (expected_dir / "transcript.txt").is_file()
     assert (expected_dir / "segments.json").is_file()
+    assert (expected_dir / "frames.json").is_file()
+    assert (expected_dir / "frames").is_dir()
 
 
 @requires_ffmpeg

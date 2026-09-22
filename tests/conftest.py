@@ -61,6 +61,33 @@ def silent_video(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
+def scene_change_video(tmp_path: Path) -> Path:
+    """색이 뚜렷하게 바뀌는 3구간(각 2초, 총 6초) 합성 영상 - 장면 감지 테스트용.
+
+    빨강 -> 파랑 -> 초록으로 전환되는 지점(약 2초, 4초)에서 장면 전환이 감지되어야
+    한다. testsrc처럼 연속적으로 변하는 패턴은 장면 감지가 잘 걸리지 않는다
+    (PR #0에서 실측 확인).
+    """
+    out = tmp_path / "scenes.mp4"
+    subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-f", "lavfi", "-i", "color=c=red:s=320x240:d=2",
+            "-f", "lavfi", "-i", "color=c=blue:s=320x240:d=2",
+            "-f", "lavfi", "-i", "color=c=green:s=320x240:d=2",
+            "-filter_complex", "[0:v][1:v][2:v]concat=n=3:v=1:a=0[outv]",
+            "-map", "[outv]",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "25",
+            str(out),
+        ],
+        capture_output=True,
+        check=True,
+        timeout=60,
+    )
+    return out
+
+
+@pytest.fixture
 def fake_whisper_model(monkeypatch: pytest.MonkeyPatch):
     """실제 Whisper 모델 다운로드/추론 없이 STT 관련 테스트를 빠르고 결정론적으로 만든다.
 

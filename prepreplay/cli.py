@@ -18,6 +18,7 @@ from prepreplay.config import (
 )
 from prepreplay.errors import DependencyError, InputValidationError, PrepReplayError
 from prepreplay.steps.audio import extract_audio
+from prepreplay.steps.frames import extract_frames
 from prepreplay.steps.transcribe import transcribe_audio
 from prepreplay.utils.ffmpeg import find_ffmpeg, find_ffprobe, get_version, probe_video
 from prepreplay.utils.gpu import detect_gpu
@@ -125,6 +126,9 @@ def run(
     scene_threshold: Optional[float] = typer.Option(
         None, "--scene-threshold", help="장면 전환 감지 임계값 (0.0~1.0). 기본: 0.3"
     ),
+    max_frames: Optional[int] = typer.Option(
+        None, "--max-frames", help="추출할 프레임 수 상한 (넘으면 균등하게 솎아냄). 기본: 200"
+    ),
     split: Optional[str] = typer.Option(
         None, "--split", help="긴 영상 구간 분할 단위 (예: 10m). 기본: 분할 안 함"
     ),
@@ -139,8 +143,9 @@ def run(
 ) -> None:
     """영상을 분석하여 output/{video_name}/ 에 결과물을 생성합니다.
 
-    이 시점(PR #4)에서는 입력 검증, 영상 메타데이터 확인, 오디오 추출, STT까지
-    동작합니다. 프레임 추출은 PR #5에서 추가됩니다.
+    이 시점(PR #5)에서는 입력 검증, 영상 메타데이터 확인, 오디오 추출, STT,
+    프레임 추출까지 동작합니다. index.md/summary_prompt.md 생성은 PR #6~#7에서
+    추가됩니다.
     """
     try:
         cfg = resolve_config(
@@ -149,6 +154,7 @@ def run(
                 "mode": mode,
                 "output": output,
                 "scene_threshold": scene_threshold,
+                "max_frames": max_frames,
                 "split": split,
                 "language": language,
                 "model": model,
@@ -219,12 +225,35 @@ def run(
                 f"{transcript_result.segments_path.name}"
             )
 
+        frames_result = extract_frames(
+            video,
+            output_dir,
+            info,
+            scene_threshold=cfg.scene_threshold,
+            max_frames=cfg.max_frames,
+            force=cfg.force,
+            console=console,
+        )
+        if frames_result.skipped:
+            console.print(
+                f"[dim]프레임 추출 스킵 (캐시됨): {frames_result.metadata_path} "
+                "(--force로 재생성 가능)[/dim]"
+            )
+        else:
+            method_label = "장면 감지" if frames_result.method == "scene_detection" else "균등 간격"
+            console.print(
+                f"[green]프레임 추출 완료[/green] ({method_label}, {frames_result.frame_count}개): "
+                f"{frames_result.frames_dir}"
+            )
+
         console.print(
             f"[bold]적용된 설정:[/bold] mode={cfg.mode}, scene_threshold={cfg.scene_threshold}, "
-            f"language={cfg.language}, model={cfg.model}, split={cfg.split or '(없음)'}"
+            f"max_frames={cfg.max_frames}, language={cfg.language}, model={cfg.model}, "
+            f"split={cfg.split or '(없음)'}"
         )
         console.print(
-            "[dim]프레임 추출 파이프라인은 아직 구현되지 않았습니다 (PR #5에서 추가 예정).[/dim]"
+            "[dim]index.md/summary_prompt.md 생성은 아직 구현되지 않았습니다 "
+            "(PR #6~#7에서 추가 예정).[/dim]"
         )
 
     except PrepReplayError as exc:

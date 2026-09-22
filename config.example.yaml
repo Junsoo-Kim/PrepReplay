@@ -10,6 +10,7 @@
 mode: default            # default | consulting | jobfair | lecture | interview
 output: output            # 결과물을 저장할 상위 디렉터리
 scene_threshold: 0.3      # 장면 전환 감지 임계값 (0.0~1.0, 낮을수록 더 많은 프레임 추출)
+max_frames: 200            # 추출할 프레임 수 상한 (넘으면 균등하게 솎아냄)
 split: null                # 예: "10m" (10분 단위 분할). null이면 분할하지 않음
 language: ko               # STT 언어 코드 (ko, en, auto 등)
 model: large-v3            # Whisper 모델 크기 (tiny/base/small/medium/large-v3)
