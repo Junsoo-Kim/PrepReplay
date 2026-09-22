@@ -38,6 +38,9 @@ pip install -e .
 
 # GPU(NVIDIA)를 사용하려면 CUDA 런타임 라이브러리도 함께 설치
 pip install -e ".[gpu]"
+
+# 화자 분리(--diarize)를 쓰려면 pyannote.audio도 함께 설치
+pip install -e ".[diarization]"
 ```
 
 ## 사용법
@@ -48,8 +51,9 @@ pip install -e ".[gpu]"
 후 `prepreplay run`을 그대로 다시 실행하면 완료된 단계는 건너뛰고 중단된 단계부터
 이어서 진행합니다. `run`에 영상 파일 대신 디렉터리를 넘기면 그 안의 영상들을 파일명순으로
 일괄 처리합니다 — 하나가 실패해도 나머지는 계속 처리되고, 끝에 성공/실패 요약이 나옵니다.
-화자 분리 등 그 밖의 편의 기능은 아직 없으며, [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)의
-PR 로드맵에 따라 계속 추가됩니다.
+`--diarize`로 화자 분리(누가 말했는지 `[화자1]`/`[화자2]` 라벨)도 켤 수 있습니다(별도 설치와
+HuggingFace 토큰 필요, 아래 참고). 그 밖의 편의 기능은
+[docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)의 PR 로드맵에 따라 계속 추가됩니다.
 
 ```bash
 prepreplay --version
@@ -78,6 +82,10 @@ prepreplay run ~/videos/lecture_algo.mp4 --quiet
 # 디렉터리를 넘기면 안의 영상들을 파일명순으로 일괄 처리 (하나가 실패해도 나머지는 계속 진행)
 prepreplay run ~/videos/lecture_series/ --mode lecture
 
+# 화자 분리 활성화 (컨설팅/스터디처럼 여러 명이 대화하는 영상에 유용)
+export HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxx   # https://huggingface.co/settings/tokens 에서 발급
+prepreplay run ~/videos/consulting_0921.mp4 --mode consulting --diarize
+
 # 환경 진단 (ffmpeg/CUDA 등 확인)
 prepreplay doctor
 ```
@@ -100,10 +108,18 @@ output/{video_name}/
 ├── summary_prompt.md        # Claude에 바로 붙여넣을 요약 프롬프트
 ├── state.json                # 재개(resume)용 단계별 완료 상태 (커밋 금지)
 ├── run.log                   # 실행 단계별 로그 (커밋 금지)
+├── diarization.json          # --diarize 사용 시: 화자별 발화 구간
 └── chunks/                  # --split 사용 시: 구간별 요약 프롬프트
     ├── part_01_000m-010m.md
     └── manifest.json
 ```
+
+`--diarize`를 쓰면 `segments.json`/`transcript.srt`/`transcript.txt`/`index.md`의 각 문장
+앞에 `[화자1]`, `[화자2]` 같은 라벨이 붙습니다.
+
+**화자 분리 사용 전 준비**: [pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
+모델 사용 약관에 동의하고, [HuggingFace 토큰](https://huggingface.co/settings/tokens)을
+발급받아 `HF_TOKEN` 환경변수로 지정하거나 `--hf-token`으로 넘겨야 합니다.
 
 ## 개발
 

@@ -23,6 +23,7 @@ from rich.progress import BarColumn, Progress, TextColumn, TimeRemainingColumn
 from prepreplay.diagnostics import diagnose_failure
 from prepreplay.errors import DependencyError, TranscriptionError
 from prepreplay.pipeline import is_cached
+from prepreplay.steps.diarize import DiarizationSegment
 from prepreplay.utils.cuda_env import ensure_cuda_libs_discoverable
 
 SEGMENTS_FILENAME = "segments.json"
@@ -135,6 +136,32 @@ def _run_transcription(
     return collected, info
 
 
+def _dominant_speaker(
+    segment: Segment, diarization_segments: list[DiarizationSegment]
+) -> Optional[str]:
+    """`segment`와 시간이 가장 많이 겹치는 화자 라벨을 반환한다(겹침이 전혀 없으면 None)."""
+    best_speaker: Optional[str] = None
+    best_overlap = 0.0
+    for d in diarization_segments:
+        overlap = min(segment.end, d.end) - max(segment.start, d.start)
+        if overlap > best_overlap:
+            best_overlap = overlap
+            best_speaker = d.speaker
+    return best_speaker
+
+
+def _apply_speaker_labels(
+    segments: list[Segment], diarization_segments: list[DiarizationSegment]
+) -> list[Segment]:
+    """각 세그먼트 텍스트 앞에 `[화자N]` 라벨을 붙인 새 세그먼트 목록을 반환한다."""
+    labeled: list[Segment] = []
+    for seg in segments:
+        speaker = _dominant_speaker(seg, diarization_segments)
+        text = f"[{speaker}] {seg.text}" if speaker else seg.text
+        labeled.append(dataclasses.replace(seg, text=text))
+    return labeled
+
+
 def transcribe_audio(
     audio_path: Path,
     output_dir: Path,
@@ -142,6 +169,7 @@ def transcribe_audio(
     model_size: str = "large-v3",
     language: str = "ko",
     duration_hint: float = 0.0,
+    diarization_segments: Optional[list[DiarizationSegment]] = None,
     force: bool = False,
     console: Optional[Console] = None,
 ) -> TranscriptionResult:
@@ -197,6 +225,9 @@ def transcribe_audio(
 
     resolved_language = getattr(info, "language", None) or language
     resolved_duration = getattr(info, "duration", None) or duration_hint
+
+    if diarization_segments:
+        segments = _apply_speaker_labels(segments, diarization_segments)
 
     _write_segments_json(
         segments,

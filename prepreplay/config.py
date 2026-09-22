@@ -32,6 +32,9 @@ class Config:
     model: str = "large-v3"
     template: Optional[Path] = None
     force: bool = False
+    diarize: bool = False
+    hf_token: Optional[str] = None
+    diarization_model: str = "pyannote/speaker-diarization-3.1"
 
     def __post_init__(self) -> None:
         if isinstance(self.output, str):
