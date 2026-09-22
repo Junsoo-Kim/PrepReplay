@@ -23,6 +23,7 @@ from typing import Optional
 
 from rich.console import Console
 
+from prepreplay.diagnostics import diagnose_failure
 from prepreplay.errors import DependencyError, FrameExtractionError
 from prepreplay.pipeline import is_cached
 from prepreplay.utils.ffmpeg import VideoInfo, find_ffmpeg
@@ -85,10 +86,10 @@ def _extract_raw_frames(
         raise FrameExtractionError(f"프레임 추출이 시간 초과되었습니다: {video}") from exc
 
     if result.returncode != 0:
-        stderr_tail = (
-            result.stderr.strip().splitlines()[-1] if result.stderr and result.stderr.strip() else None
-        )
-        raise FrameExtractionError(f"ffmpeg가 프레임을 추출하지 못했습니다: {video}", hint=stderr_tail)
+        stderr_text = result.stderr.strip() if result.stderr else ""
+        stderr_tail = stderr_text.splitlines()[-1] if stderr_text else None
+        hint = diagnose_failure(stderr_text) or stderr_tail
+        raise FrameExtractionError(f"ffmpeg가 프레임을 추출하지 못했습니다: {video}", hint=hint)
 
     return [float(m) for m in _PTS_TIME_RE.findall(result.stderr)]
 

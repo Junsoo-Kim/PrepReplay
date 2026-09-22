@@ -43,7 +43,10 @@ pip install -e ".[gpu]"
 ## 사용법
 
 핵심 파이프라인(오디오 추출 → STT → 프레임 추출 → index.md → summary_prompt.md)이 모두
-동작합니다. 편의 기능(로깅/재개, 화자 분리 등)은 아직 없으며,
+동작합니다. 각 실행은 `output/{video_name}/run.log`에 단계별 로그를 남기고,
+`output/{video_name}/state.json`으로 완료된 단계를 추적합니다 — 중단(Ctrl+C, 크래시)
+후 `prepreplay run`을 그대로 다시 실행하면 완료된 단계는 건너뛰고 중단된 단계부터
+이어서 진행합니다. 화자 분리 등 그 밖의 편의 기능은 아직 없으며,
 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)의 PR 로드맵에 따라 계속 추가됩니다.
 
 ```bash
@@ -64,6 +67,12 @@ prepreplay run ~/videos/interview_practice.mp4 --scene-threshold 0.2 --max-frame
 # 긴 영상(30분+)은 10분 단위로 구간 분할 - chunks/part_01_000m-010m.md 형태로 생성
 prepreplay run ~/videos/lecture_algo.mp4 --split 10m
 
+# 상세 로그를 stderr에도 함께 출력 (run.log에는 항상 기록됨)
+prepreplay run ~/videos/lecture_algo.mp4 --verbose
+
+# 진행 상황 출력을 억제 (에러는 계속 출력됨)
+prepreplay run ~/videos/lecture_algo.mp4 --quiet
+
 # 환경 진단 (ffmpeg/CUDA 등 확인)
 prepreplay doctor
 ```
@@ -76,14 +85,19 @@ prepreplay doctor
 
 ```
 output/{video_name}/
-├── transcript.srt          # 타임스탬프 포함 스크립트
-├── transcript.txt          # 순수 텍스트
-├── frames/                 # 장면 전환 시점 프레임 이미지
-├── index.md                # 타임스탬프-프레임-스크립트 매핑
+├── audio.wav                # 추출된 오디오 (16kHz mono 16-bit PCM WAV)
+├── segments.json             # STT 결과 구조화 데이터 (이후 단계가 의존)
+├── transcript.srt           # 타임스탬프 포함 스크립트
+├── transcript.txt           # 순수 텍스트
+├── frames/                  # 장면 전환 시점 프레임 이미지
+├── frames.json               # 프레임 메타데이터
+├── index.md                 # 타임스탬프-프레임-스크립트 매핑
 ├── summary_prompt.md        # Claude에 바로 붙여넣을 요약 프롬프트
+├── state.json                # 재개(resume)용 단계별 완료 상태 (커밋 금지)
+├── run.log                   # 실행 단계별 로그 (커밋 금지)
 └── chunks/                  # --split 사용 시: 구간별 요약 프롬프트
     ├── part_01_000m-010m.md
-    └── ...
+    └── manifest.json
 ```
 
 ## 개발

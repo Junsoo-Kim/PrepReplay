@@ -13,6 +13,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+from prepreplay.diagnostics import diagnose_failure
 from prepreplay.errors import DependencyError, ProbeError
 
 _FFMPEG_INSTALL_HINT = (
@@ -98,8 +99,10 @@ def probe_video(path: Path) -> VideoInfo:
         raise ProbeError(f"ffprobe 실행이 30초를 초과했습니다: {path}") from exc
 
     if result.returncode != 0:
-        stderr_tail = result.stderr.strip().splitlines()[-1] if result.stderr and result.stderr.strip() else None
-        raise ProbeError(f"ffprobe가 영상을 읽지 못했습니다: {path}", hint=stderr_tail)
+        stderr_text = result.stderr.strip() if result.stderr else ""
+        stderr_tail = stderr_text.splitlines()[-1] if stderr_text else None
+        hint = diagnose_failure(stderr_text) or stderr_tail
+        raise ProbeError(f"ffprobe가 영상을 읽지 못했습니다: {path}", hint=hint)
 
     try:
         data = json.loads(result.stdout)
