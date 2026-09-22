@@ -1,6 +1,6 @@
 # PrepReplay 개발 계획 (PR 단위)
 
-기획서(`기획서.md`)를 PR/커밋 단위 작업으로 분해한 실행 계획서.
+기획서(`PROPOSAL.md`)를 PR/커밋 단위 작업으로 분해한 실행 계획서.
 
 ---
 
@@ -103,7 +103,7 @@ tests/
 - `.gitignore` (venv, `__pycache__`, `output/`, `*.mp4`, `*.wav`, 모델 캐시)
 - `pyproject.toml` — 패키지 메타 + 의존성(typer, rich, pyyaml) + `prepreplay` 콘솔 스크립트
 - `README.md` — 설치/사용법 뼈대, ffmpeg 사전 설치 안내
-- `기획서.md`, `DEVELOPMENT_PLAN.md` → `docs/` 로 이동
+- `PROPOSAL.md`(구 기획서.md), `DEVELOPMENT_PLAN.md` → `docs/` 로 이동
 - 빈 패키지 구조(`prepreplay/__init__.py`, `steps/`, `tests/`)
 
 **DoD**: `pip install -e .` 성공, `prepreplay --help` 출력됨.

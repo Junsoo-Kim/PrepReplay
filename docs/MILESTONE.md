@@ -1,7 +1,7 @@
 # MILESTONE
 
 PrepReplay의 진행 현황을 추적하는 문서. 원래 계획은 [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md),
-배경/설계는 [기획서.md](기획서.md) 참고. 이 문서는 "지금 어디까지 됐고, 다음은 뭔지"만 담는다.
+배경/설계는 [PROPOSAL.md](PROPOSAL.md) 참고. 이 문서는 "지금 어디까지 됐고, 다음은 뭔지"만 담는다.
 
 마지막 갱신: 2026-09-22 (PR #8 머지 직후)
 

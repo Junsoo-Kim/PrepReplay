@@ -4,7 +4,7 @@
 자동으로 분석하여, **음성 스크립트(타임스탬프 포함) + 장면 전환 핵심 프레임 이미지**로 분해하는
 로컬 CLI 도구입니다. 결과물은 Claude에게 "영상을 본 것처럼" 붙여넣을 수 있는 형태로 정리됩니다.
 
-자세한 배경과 설계는 [docs/기획서.md](docs/기획서.md), 개발 단계별 계획은
+자세한 배경과 설계는 [docs/PROPOSAL.md](docs/PROPOSAL.md), 개발 단계별 계획은
 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md), 현재 진행 상황은
 [docs/MILESTONE.md](docs/MILESTONE.md)를 참고하세요.
 
