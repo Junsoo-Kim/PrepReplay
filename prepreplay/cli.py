@@ -1,18 +1,34 @@
-"""PrepReplay CLI 엔트리포인트.
+"""PrepReplay CLI 엔트리포인트."""
 
-실제 명령(run, doctor 등)은 PR #2 이후 단계에서 채워진다.
-이 파일은 `prepreplay --help`가 동작하는 최소 골격만 담는다.
-"""
+from __future__ import annotations
+
+import shutil
+from pathlib import Path
+from typing import Optional
 
 import typer
+from rich.console import Console
+from rich.table import Table
 
 from prepreplay import __version__
+from prepreplay.config import (
+    SUPPORTED_VIDEO_EXTENSIONS,
+    VALID_MODES,
+    resolve_config,
+)
+from prepreplay.errors import DependencyError, InputValidationError, PrepReplayError
+from prepreplay.utils.ffmpeg import find_ffmpeg, find_ffprobe, get_version, probe_video
+from prepreplay.utils.gpu import detect_gpu
 
 app = typer.Typer(
     name="prepreplay",
     help="로컬 영상을 분석하여 스크립트+프레임+Claude용 프롬프트로 변환하는 CLI 도구.",
     no_args_is_help=True,
 )
+console = Console()
+error_console = Console(stderr=True)
+
+MIN_RECOMMENDED_FREE_GB = 5.0
 
 
 def _version_callback(value: bool) -> None:
@@ -32,6 +48,167 @@ def main(
     ),
 ) -> None:
     """PrepReplay: 로컬 영상 분석 CLI."""
+
+
+def _print_error(exc: PrepReplayError) -> None:
+    error_console.print(f"[bold red]✗ [{exc.stage}] 실패[/bold red]: {exc.message}")
+    if exc.hint:
+        error_console.print(f"  [yellow]조치:[/yellow] {exc.hint}")
+
+
+@app.command()
+def doctor() -> None:
+    """실행 환경(ffmpeg, GPU, 디스크 여유 공간 등)을 점검합니다."""
+    table = Table(title="PrepReplay 환경 진단")
+    table.add_column("항목")
+    table.add_column("상태")
+    table.add_column("세부 정보")
+
+    required_ok = True
+
+    ffmpeg_path = find_ffmpeg()
+    if ffmpeg_path:
+        table.add_row("ffmpeg", "[green]OK[/green]", get_version(ffmpeg_path) or ffmpeg_path)
+    else:
+        table.add_row("ffmpeg", "[bold red]누락[/bold red]", "winget install Gyan.FFmpeg (Windows)")
+        required_ok = False
+
+    ffprobe_path = find_ffprobe()
+    if ffprobe_path:
+        table.add_row("ffprobe", "[green]OK[/green]", get_version(ffprobe_path) or ffprobe_path)
+    else:
+        table.add_row("ffprobe", "[bold red]누락[/bold red]", "ffmpeg 설치에 포함되어 있습니다")
+        required_ok = False
+
+    gpu = detect_gpu()
+    if gpu:
+        table.add_row(
+            "GPU",
+            "[green]감지됨[/green]",
+            f"{gpu.name} (driver {gpu.driver_version}, {gpu.memory_total})",
+        )
+    else:
+        table.add_row("GPU", "[yellow]미감지[/yellow]", "CPU 모드로 동작합니다 (STT 속도 저하 예상)")
+
+    _, _, free_bytes = shutil.disk_usage(Path.cwd())
+    free_gb = free_bytes / (1024**3)
+    disk_status = "[green]OK[/green]" if free_gb >= MIN_RECOMMENDED_FREE_GB else "[yellow]부족 가능[/yellow]"
+    table.add_row("디스크 여유 공간", disk_status, f"{free_gb:.1f} GB (현재 디렉터리 기준)")
+
+    console.print(table)
+
+    if not required_ok:
+        error_console.print(
+            "[bold red]필수 도구가 누락되어 파이프라인을 실행할 수 없습니다. "
+            "위 안내에 따라 설치 후 다시 실행하세요.[/bold red]"
+        )
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def run(
+    video: Path = typer.Argument(
+        ...,
+        help="분석할 로컬 영상 파일 경로",
+        exists=True,
+        dir_okay=False,
+        readable=True,
+    ),
+    mode: Optional[str] = typer.Option(
+        None, "--mode", help=f"유스케이스 모드 ({', '.join(VALID_MODES)}). 기본: default"
+    ),
+    output: Optional[Path] = typer.Option(
+        None, "--output", help="결과물을 저장할 상위 디렉터리. 기본: ./output"
+    ),
+    scene_threshold: Optional[float] = typer.Option(
+        None, "--scene-threshold", help="장면 전환 감지 임계값 (0.0~1.0). 기본: 0.3"
+    ),
+    split: Optional[str] = typer.Option(
+        None, "--split", help="긴 영상 구간 분할 단위 (예: 10m). 기본: 분할 안 함"
+    ),
+    language: Optional[str] = typer.Option(None, "--language", help="STT 언어 코드. 기본: ko"),
+    model: Optional[str] = typer.Option(None, "--model", help="Whisper 모델 크기. 기본: large-v3"),
+    force: Optional[bool] = typer.Option(
+        None, "--force/--no-force", help="캐시된 산출물이 있어도 강제로 재생성"
+    ),
+    config_path: Optional[Path] = typer.Option(
+        None, "--config", help="설정 파일 경로. 기본: ./config.yaml (있는 경우)"
+    ),
+) -> None:
+    """영상을 분석하여 output/{video_name}/ 에 결과물을 생성합니다.
+
+    이 시점(PR #2)에서는 입력 검증, 영상 메타데이터 확인, 출력 폴더 준비까지만
+    동작합니다. 오디오 추출/STT/프레임 추출은 PR #3~#5에서 추가됩니다.
+    """
+    try:
+        cfg = resolve_config(
+            config_path=config_path,
+            cli_overrides={
+                "mode": mode,
+                "output": output,
+                "scene_threshold": scene_threshold,
+                "split": split,
+                "language": language,
+                "model": model,
+                "force": force,
+            },
+        )
+
+        if cfg.mode not in VALID_MODES:
+            raise InputValidationError(
+                f"알 수 없는 모드입니다: {cfg.mode}",
+                hint=f"다음 중 하나를 사용하세요: {', '.join(VALID_MODES)}",
+            )
+
+        if video.suffix.lower() not in SUPPORTED_VIDEO_EXTENSIONS:
+            raise InputValidationError(
+                f"지원하지 않는 파일 확장자입니다: {video.suffix}",
+                hint=f"지원 형식: {', '.join(SUPPORTED_VIDEO_EXTENSIONS)}",
+            )
+
+        if find_ffmpeg() is None or find_ffprobe() is None:
+            raise DependencyError(
+                "ffmpeg/ffprobe를 찾을 수 없습니다.",
+                hint="`prepreplay doctor`로 환경을 점검하세요.",
+            )
+
+        console.print(f"[bold]입력 영상:[/bold] {video}")
+        info = probe_video(video)
+
+        meta_table = Table(title="영상 메타데이터")
+        meta_table.add_column("항목")
+        meta_table.add_column("값")
+        meta_table.add_row("길이", info.duration_hms)
+        meta_table.add_row("해상도", f"{info.width}x{info.height}" if info.width else "알 수 없음")
+        meta_table.add_row("비디오 코덱", info.video_codec or "알 수 없음")
+        meta_table.add_row("오디오 코덱", info.audio_codec or "(오디오 트랙 없음)")
+        meta_table.add_row("파일 크기", f"{info.size_bytes / (1024**2):.1f} MB")
+        console.print(meta_table)
+
+        if not info.has_audio:
+            console.print(
+                "[yellow]⚠ 오디오 트랙이 없습니다. STT 단계에서 스크립트가 생성되지 않습니다.[/yellow]"
+            )
+
+        output_dir = cfg.output / video.stem
+        if output_dir.exists() and not cfg.force:
+            console.print(f"[dim]출력 폴더가 이미 존재합니다: {output_dir} (--force로 재생성 가능)[/dim]")
+        else:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            console.print(f"[green]출력 폴더 준비 완료:[/green] {output_dir}")
+
+        console.print(
+            f"[bold]적용된 설정:[/bold] mode={cfg.mode}, scene_threshold={cfg.scene_threshold}, "
+            f"language={cfg.language}, model={cfg.model}, split={cfg.split or '(없음)'}"
+        )
+        console.print(
+            "[dim]오디오 추출/STT/프레임 추출 파이프라인은 아직 구현되지 않았습니다 "
+            "(PR #3~#5에서 추가 예정). 현재는 입력 검증 및 출력 폴더 준비까지만 수행합니다.[/dim]"
+        )
+
+    except PrepReplayError as exc:
+        _print_error(exc)
+        raise typer.Exit(code=1) from exc
 
 
 if __name__ == "__main__":
