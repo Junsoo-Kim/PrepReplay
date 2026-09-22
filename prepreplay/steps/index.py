@@ -38,7 +38,7 @@ class IndexResult:
 
 
 @dataclasses.dataclass
-class _Section:
+class Section:
     start: float
     end: float
     frame_filename: Optional[str]
@@ -61,10 +61,20 @@ def _format_timestamp(seconds: float) -> str:
     return f"{minutes:02d}:{secs:02d}"
 
 
-def _build_sections(
-    segments: list[dict], frames: list[dict], duration_seconds: float
-) -> list[_Section]:
-    """frames의 각 타임스탬프를 경계로 segments를 구간별로 묶는다."""
+def build_sections(
+    segments: list[dict],
+    frames: list[dict],
+    duration_seconds: float,
+    *,
+    range_start: float = 0.0,
+) -> list[Section]:
+    """frames의 각 타임스탬프를 경계로 segments를 구간별로 묶는다.
+
+    `range_start`/`duration_seconds`는 인트로 섹션의 시작과 마지막 섹션의 끝을
+    결정한다. 영상 전체를 다룰 때는 기본값(0.0 ~ 영상 길이)을 쓰고, PR #8의
+    구간 분할(split.py)처럼 시간 구간 일부만 다룰 때는 그 구간의 시작/끝을
+    넘겨 절대 타임스탬프가 어긋나지 않게 한다.
+    """
     frames = sorted(frames, key=lambda f: f["timestamp"])
     frame_timestamps = [f["timestamp"] for f in frames]
 
@@ -74,12 +84,12 @@ def _build_sections(
         idx = bisect.bisect_right(frame_timestamps, seg["start"]) - 1
         buckets[idx].append(seg["text"])
 
-    sections: list[_Section] = []
+    sections: list[Section] = []
 
     if frame_timestamps and buckets.get(-1):
         sections.append(
-            _Section(
-                start=0.0,
+            Section(
+                start=range_start,
                 end=frame_timestamps[0],
                 frame_filename=None,
                 text=" ".join(buckets[-1]),
@@ -90,7 +100,7 @@ def _build_sections(
         start = frame_timestamps[i]
         end = frame_timestamps[i + 1] if i + 1 < len(frame_timestamps) else max(duration_seconds, start)
         sections.append(
-            _Section(
+            Section(
                 start=start,
                 end=end,
                 frame_filename=frame["filename"],
@@ -100,8 +110,8 @@ def _build_sections(
 
     if not frames and segments:
         sections.append(
-            _Section(
-                start=0.0,
+            Section(
+                start=range_start,
                 end=duration_seconds,
                 frame_filename=None,
                 text=" ".join(seg["text"] for seg in segments),
@@ -120,7 +130,7 @@ def _render_markdown(
     stt_model: str,
     stt_language: str,
     stt_device: str,
-    sections: list[_Section],
+    sections: list[Section],
 ) -> str:
     method_label = _FRAME_METHOD_LABELS.get(frame_method, frame_method)
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -187,7 +197,7 @@ def generate_index(
     segments = segments_data.get("segments", [])
     frames = frames_data.get("frames", [])
 
-    sections = _build_sections(segments, frames, duration_seconds)
+    sections = build_sections(segments, frames, duration_seconds)
 
     markdown = _render_markdown(
         video_name=video_name,

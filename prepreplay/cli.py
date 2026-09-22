@@ -20,6 +20,11 @@ from prepreplay.errors import DependencyError, InputValidationError, PrepReplayE
 from prepreplay.steps.audio import extract_audio
 from prepreplay.steps.frames import extract_frames
 from prepreplay.steps.index import generate_index
+from prepreplay.steps.split import (
+    LONG_VIDEO_WARNING_THRESHOLD_SECONDS,
+    parse_split_seconds,
+    split_into_chunks,
+)
 from prepreplay.steps.summary_prompt import generate_summary_prompt
 from prepreplay.steps.transcribe import transcribe_audio
 from prepreplay.utils.ffmpeg import find_ffmpeg, find_ffprobe, get_version, probe_video
@@ -151,7 +156,8 @@ def run(
     """영상을 분석하여 output/{video_name}/ 에 결과물을 생성합니다.
 
     입력 검증, 영상 메타데이터 확인, 오디오 추출, STT, 프레임 추출, index.md,
-    summary_prompt.md 생성까지 전체 파이프라인이 동작합니다.
+    summary_prompt.md 생성까지 전체 파이프라인이 동작합니다. `--split`을 지정하면
+    긴 영상을 chunks/*.md로 나눠 구간별로도 붙여넣을 수 있게 만듭니다.
     """
     try:
         cfg = resolve_config(
@@ -181,6 +187,9 @@ def run(
                 hint=f"지원 형식: {', '.join(SUPPORTED_VIDEO_EXTENSIONS)}",
             )
 
+        if cfg.split is not None:
+            parse_split_seconds(cfg.split)  # 형식 검증만 미리 수행 (나머지 단계 전에 빨리 실패)
+
         if find_ffmpeg() is None or find_ffprobe() is None:
             raise DependencyError(
                 "ffmpeg/ffprobe를 찾을 수 없습니다.",
@@ -199,6 +208,12 @@ def run(
         meta_table.add_row("오디오 코덱", info.audio_codec or "(오디오 트랙 없음)")
         meta_table.add_row("파일 크기", f"{info.size_bytes / (1024**2):.1f} MB")
         console.print(meta_table)
+
+        if cfg.split is None and info.duration_seconds > LONG_VIDEO_WARNING_THRESHOLD_SECONDS:
+            console.print(
+                "[yellow]⚠ 30분을 넘는 영상입니다. --split 10m 같은 옵션으로 구간을 "
+                "나누는 것을 권장합니다 (한 번에 붙여넣기엔 스크립트가 길어질 수 있습니다).[/yellow]"
+            )
 
         output_dir = cfg.output / video.stem
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -287,6 +302,27 @@ def run(
                 f"[green]summary_prompt.md 생성 완료[/green] (mode={prompt_result.mode}): "
                 f"{prompt_result.path}"
             )
+
+        if cfg.split is not None:
+            split_result = split_into_chunks(
+                output_dir,
+                video_name=video.name,
+                duration_seconds=info.duration_seconds,
+                split_spec=cfg.split,
+                mode=cfg.mode,
+                template_path=cfg.template,
+                force=cfg.force,
+            )
+            if split_result.skipped:
+                console.print(
+                    f"[dim]구간 분할 스킵 (캐시됨): {split_result.chunks_dir} "
+                    "(--force로 재생성 가능)[/dim]"
+                )
+            else:
+                console.print(
+                    f"[green]구간 분할 완료[/green] ({split_result.chunk_count}개 파일): "
+                    f"{split_result.chunks_dir}"
+                )
 
         console.print(
             f"[bold]적용된 설정:[/bold] mode={cfg.mode}, scene_threshold={cfg.scene_threshold}, "

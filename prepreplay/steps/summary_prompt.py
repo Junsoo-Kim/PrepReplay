@@ -39,7 +39,11 @@ def _format_timestamp(seconds: float) -> str:
     return f"{minutes:02d}:{secs:02d}"
 
 
-def _load_instruction(mode: str, template_path: Optional[Path]) -> str:
+def load_instruction(mode: str, template_path: Optional[Path]) -> str:
+    """--mode의 내장 템플릿, 또는 template_path가 있으면 그 파일의 지시문을 읽는다.
+
+    split.py(PR #8)의 구간별 프롬프트 생성에서도 재사용한다.
+    """
     if template_path is not None:
         if not template_path.exists():
             raise SummaryPromptError(
@@ -90,7 +94,7 @@ def generate_summary_prompt(
             hint="index.md 생성 단계가 먼저 성공해야 합니다.",
         )
 
-    instruction = _load_instruction(mode, template_path)
+    instruction = load_instruction(mode, template_path)
     sections = _extract_index_sections(index_path.read_text(encoding="utf-8"))
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
