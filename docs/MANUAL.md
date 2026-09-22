@@ -57,7 +57,7 @@ ffmpeg/ffprobe/GPU/디스크 여유공간을 점검한다. 필수 도구(ffmpeg/
 
 | 옵션 | 기본값 | 설명 |
 |---|---|---|
-| `<video>` (필수) | - | 분석할 로컬 영상 경로. mp4/mov/mkv/avi/webm 지원 |
+| `<video>` (필수) | - | 분석할 로컬 영상 경로, 또는 영상이 담긴 디렉터리(mp4/mov/mkv/avi/webm 지원). 디렉터리면 안의 영상들을 파일명순으로 일괄 처리 |
 | `--mode` | `default` | 요약 프롬프트 지시문 선택. `consulting`/`jobfair`/`lecture`/`interview`/`default` |
 | `--output` | `./output` | 결과물 상위 폴더. 실제로는 `{output}/{영상파일명}/` 에 저장됨 |
 | `--scene-threshold` | `0.3` | 장면 전환 감지 민감도(0.0~1.0). 낮을수록 프레임이 더 많이 잡힘 |
@@ -68,6 +68,8 @@ ffmpeg/ffprobe/GPU/디스크 여유공간을 점검한다. 필수 도구(ffmpeg/
 | `--template` | (없음) | 커스텀 프롬프트 템플릿 파일 경로. 지정하면 `--mode`의 내장 지시문 대신 사용 |
 | `--force` / `--no-force` | `--no-force` | 이미 만들어진 산출물이 있어도 강제로 다시 생성 |
 | `--config` | `./config.yaml` (있으면) | 설정 파일 경로 직접 지정 |
+| `--verbose` / `-v` | 꺼짐 | 상세 로그를 stderr에도 함께 출력 (`run.log`에는 항상 기록됨) |
+| `--quiet` / `-q` | 꺼짐 | 진행 상황 출력을 억제 (에러는 계속 출력됨). `--verbose`와 동시 사용 불가 |
 
 **옵션 우선순위**: CLI 옵션(명시적으로 지정한 것) > `config.yaml` > 내장 기본값.
 
@@ -87,6 +89,9 @@ prepreplay run ~/videos/sample.mp4 --model tiny
 
 # 직접 쓴 지시문으로
 prepreplay run ~/videos/mystery.mp4 --template ./my_prompt.md
+
+# 강의 시리즈 디렉터리를 통째로 일괄 처리 (파일명순, 하나 실패해도 나머지는 계속)
+prepreplay run ~/videos/algo_lecture_series/ --mode lecture
 ```
 
 ---
@@ -129,11 +134,16 @@ output/{영상파일명}/
 ├── frames.json           # 프레임 메타데이터 (추출 방식/타임스탬프)
 ├── index.md              # ★ 가장 먼저 열어볼 파일 - 화면+스크립트가 시간순으로 매핑됨
 ├── summary_prompt.md     # ★ 이걸 복사해서 Claude에 붙여넣으면 됨
+├── state.json             # 재개(resume)용 단계별 완료 상태 (안 봐도 됨, 커밋 금지)
+├── run.log                # 실행 단계별 로그 (문제 생겼을 때 확인, 커밋 금지)
 └── chunks/                # --split 지정 시에만 생성
     ├── manifest.json
     ├── part_01_000m-010m.md   # 구간별로 독립된 요약 프롬프트
     └── ...
 ```
+
+디렉터리를 넘겨 여러 영상을 일괄 처리하면, 위 구조가 영상마다 각각의
+`output/{영상파일명}/`에 독립적으로 생긴다.
 
 - **`index.md`**: 사람이 훑어보는 용도. 어느 화면에서 무슨 말을 했는지 한눈에 파악하려면 이 파일.
 - **`summary_prompt.md`**: Claude에게 시킬 요청 문구(모드별 지시문) + 영상 정보 + `index.md`의
@@ -164,6 +174,16 @@ prepreplay run video.mp4 --mode consulting --force
 
 `--scene-threshold`나 `--model`처럼 이전 단계의 산출물에 영향을 주는 옵션을 바꿨다면
 `--force`를 꼭 같이 써야 한다 (그렇지 않으면 예전 값으로 만든 결과가 그대로 재사용된다).
+
+**중단 후 재개**: 이 스킵 여부는 파일이 있는지만 보는 게 아니라 `state.json`의 완료
+마커도 함께 확인한다. STT 도중 Ctrl+C로 중단하거나 크래시가 나면 그 단계는 완료로
+표시되지 않으므로, `prepreplay run video.mp4`를 그대로 다시 실행하면 이미 끝난 오디오
+추출은 재사용하고 중단됐던 STT부터 이어서 진행한다(중간에 남은 손상된 파일을 신뢰하지
+않고 다시 만든다). 무슨 일이 있었는지는 `output/{영상파일명}/run.log`에서 확인할 수 있다.
+
+**디렉터리(배치) 입력도 영상별로 동일하게 적용**된다. 강의 20개짜리 디렉터리를 처리하다
+중단되거나 일부 영상이 실패해도, 그대로 다시 실행하면 이미 성공한 영상은 건너뛰고
+중단/실패했던 영상부터 이어서 처리한다.
 
 ---
 
@@ -218,6 +238,12 @@ prepreplay run video.mp4 --mode consulting --force
 → `config.yaml`의 들여쓰기/키 이름을 확인. 허용된 키는 `config.example.yaml`에 있는 것들
   (`mode`, `output`, `scene_threshold`, `max_frames`, `split`, `language`, `model`,
   `template`, `force`)뿐이며 오타가 있으면 에러 메시지에 허용된 목록이 함께 뜬다.
+
+**디렉터리로 일괄 처리했는데 종료 코드가 1로 나옴**
+→ 정상 동작이다. 배치 중 하나라도 실패한 영상이 있으면 전체 종료 코드가 1이 된다(스크립트에서
+  성공/실패를 구분하려는 의도). 출력 마지막의 "배치 처리 요약" 표에서 어느 영상이 왜 실패했는지
+  확인할 수 있다. 실패한 영상만 원인을 고친 뒤 같은 명령을 그대로 다시 실행하면, 이미 성공한
+  영상은 건너뛰고 실패했던 영상만 다시 처리된다.
 
 **개인정보가 걱정됨**
 → 컨설팅/면접처럼 민감한 내용을 다루는 영상이 많다면, `output/` 폴더(그리고 `config.yaml`
