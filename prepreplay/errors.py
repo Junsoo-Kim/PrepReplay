@@ -43,3 +43,9 @@ class ProbeError(PrepReplayError):
     """ffprobe로 영상 메타데이터를 읽지 못했을 때."""
 
     stage = "메타데이터 분석"
+
+
+class AudioExtractionError(PrepReplayError):
+    """오디오 트랙 추출(ffmpeg) 실패, 또는 오디오 트랙이 아예 없을 때."""
+
+    stage = "오디오 추출"

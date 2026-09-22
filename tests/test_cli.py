@@ -66,5 +66,14 @@ def test_run_end_to_end_creates_output_dir_and_prints_metadata(
     )
     assert result.exit_code == 0, result.output
     assert "영상 메타데이터" in result.output
+    assert "오디오 추출 완료" in result.output
     expected_dir = output_root / sample_video.stem
     assert expected_dir.is_dir()
+    assert (expected_dir / "audio.wav").is_file()
+
+
+@requires_ffmpeg
+def test_run_rejects_video_without_audio_track(tmp_path: Path, silent_video: Path) -> None:
+    result = runner.invoke(app, ["run", str(silent_video), "--output", str(tmp_path / "out")])
+    assert result.exit_code == 1
+    assert "오디오 추출" in result.output
