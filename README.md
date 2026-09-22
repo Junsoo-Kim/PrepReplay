@@ -5,7 +5,8 @@
 로컬 CLI 도구입니다. 결과물은 Claude에게 "영상을 본 것처럼" 붙여넣을 수 있는 형태로 정리됩니다.
 
 자세한 배경과 설계는 [docs/기획서.md](docs/기획서.md), 개발 단계별 계획은
-[docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)를 참고하세요.
+[docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md), 현재 진행 상황은
+[docs/MILESTONE.md](docs/MILESTONE.md)를 참고하세요.
 
 ## 필수 사전 설치
 
