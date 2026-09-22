@@ -70,6 +70,7 @@ def test_run_end_to_end_creates_output_dir_and_prints_metadata(
     assert "STT 완료" in result.output
     assert "프레임 추출 완료" in result.output
     assert "index.md 생성 완료" in result.output
+    assert "summary_prompt.md 생성 완료" in result.output
     expected_dir = output_root / sample_video.stem
     assert expected_dir.is_dir()
     assert (expected_dir / "audio.wav").is_file()
@@ -79,6 +80,31 @@ def test_run_end_to_end_creates_output_dir_and_prints_metadata(
     assert (expected_dir / "frames.json").is_file()
     assert (expected_dir / "frames").is_dir()
     assert (expected_dir / "index.md").is_file()
+    assert (expected_dir / "summary_prompt.md").is_file()
+
+
+@requires_ffmpeg
+def test_run_respects_mode_and_custom_template(
+    tmp_path: Path, sample_video: Path, fake_whisper_model
+) -> None:
+    custom_template = tmp_path / "custom.md"
+    custom_template.write_text("커스텀 지시문 테스트.", encoding="utf-8")
+    output_root = tmp_path / "out"
+
+    result = runner.invoke(
+        app,
+        [
+            "run", str(sample_video),
+            "--output", str(output_root),
+            "--mode", "jobfair",
+            "--template", str(custom_template),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    prompt_path = output_root / sample_video.stem / "summary_prompt.md"
+    content = prompt_path.read_text(encoding="utf-8")
+    assert "커스텀 지시문 테스트." in content
+    assert "회사명" not in content  # jobfair.md 기본 지시문이 아니라 커스텀 템플릿이 쓰여야 함
 
 
 @requires_ffmpeg

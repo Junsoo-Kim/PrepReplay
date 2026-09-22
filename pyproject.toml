@@ -34,3 +34,8 @@ prepreplay = "prepreplay.cli:app"
 
 [tool.setuptools.packages.find]
 include = ["prepreplay*"]
+
+[tool.setuptools.package-data]
+# 모드별 프롬프트 템플릿. -e 설치에서는 없어도 소스 경로로 바로 읽히지만,
+# 일반(비-editable) 설치본에도 포함되도록 명시한다.
+prepreplay = ["templates/*.md"]

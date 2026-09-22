@@ -14,4 +14,5 @@ max_frames: 200            # 추출할 프레임 수 상한 (넘으면 균등하
 split: null                # 예: "10m" (10분 단위 분할). null이면 분할하지 않음
 language: ko               # STT 언어 코드 (ko, en, auto 등)
 model: large-v3            # Whisper 모델 크기 (tiny/base/small/medium/large-v3)
+template: null              # 사용자 정의 요약 프롬프트 템플릿 파일 경로. null이면 mode의 내장 템플릿 사용
 force: false                # 캐시된 산출물이 있어도 강제로 재생성할지 여부

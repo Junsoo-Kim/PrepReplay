@@ -35,8 +35,9 @@ pip install -e ".[gpu]"
 
 ## 사용법
 
-> ⚠️ 아직 개발 초기 단계입니다. 아래는 목표로 하는 최종 사용법이며, 각 기능은
-> [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)의 PR 로드맵에 따라 순차적으로 구현됩니다.
+핵심 파이프라인(오디오 추출 → STT → 프레임 추출 → index.md → summary_prompt.md)이 모두
+동작합니다. 구간 분할(`--split`) 등 일부 편의 기능은 아직 없으며,
+[docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)의 PR 로드맵에 따라 계속 추가됩니다.
 
 ```bash
 prepreplay --version
@@ -44,12 +45,21 @@ prepreplay --version
 # 기본 실행
 prepreplay run ~/videos/consulting_0921.mp4
 
-# 유스케이스 지정 (요약 프롬프트 템플릿에 반영)
+# 유스케이스 지정 (요약 프롬프트 템플릿에 반영: consulting/jobfair/lecture/interview)
 prepreplay run ~/videos/jobfair_kakao.mp4 --mode jobfair
+
+# 직접 작성한 프롬프트 템플릿 사용
+prepreplay run ~/videos/lecture_algo.mp4 --template ./my_template.md
+
+# 장면 감지 민감도, 프레임 수 상한 조절
+prepreplay run ~/videos/interview_practice.mp4 --scene-threshold 0.2 --max-frames 50
 
 # 환경 진단 (ffmpeg/CUDA 등 확인)
 prepreplay doctor
 ```
+
+실행이 끝나면 `output/{video_name}/summary_prompt.md`를 그대로 복사해 Claude에 붙여넣으면
+됩니다.
 
 ## 출력 구조
 
