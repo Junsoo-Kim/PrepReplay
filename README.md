@@ -36,7 +36,7 @@ pip install -e ".[gpu]"
 ## 사용법
 
 핵심 파이프라인(오디오 추출 → STT → 프레임 추출 → index.md → summary_prompt.md)이 모두
-동작합니다. 구간 분할(`--split`) 등 일부 편의 기능은 아직 없으며,
+동작합니다. 편의 기능(로깅/재개, 화자 분리 등)은 아직 없으며,
 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)의 PR 로드맵에 따라 계속 추가됩니다.
 
 ```bash
@@ -54,12 +54,16 @@ prepreplay run ~/videos/lecture_algo.mp4 --template ./my_template.md
 # 장면 감지 민감도, 프레임 수 상한 조절
 prepreplay run ~/videos/interview_practice.mp4 --scene-threshold 0.2 --max-frames 50
 
+# 긴 영상(30분+)은 10분 단위로 구간 분할 - chunks/part_01_000m-010m.md 형태로 생성
+prepreplay run ~/videos/lecture_algo.mp4 --split 10m
+
 # 환경 진단 (ffmpeg/CUDA 등 확인)
 prepreplay doctor
 ```
 
 실행이 끝나면 `output/{video_name}/summary_prompt.md`를 그대로 복사해 Claude에 붙여넣으면
-됩니다.
+됩니다. `--split`을 쓰면 `chunks/` 폴더의 파일들을 구간별로 각각 붙여넣을 수도 있습니다
+(한 번에 넣기엔 스크립트가 너무 긴 긴 영상용).
 
 ## 출력 구조
 
@@ -69,7 +73,10 @@ output/{video_name}/
 ├── transcript.txt          # 순수 텍스트
 ├── frames/                 # 장면 전환 시점 프레임 이미지
 ├── index.md                # 타임스탬프-프레임-스크립트 매핑
-└── summary_prompt.md        # Claude에 바로 붙여넣을 요약 프롬프트
+├── summary_prompt.md        # Claude에 바로 붙여넣을 요약 프롬프트
+└── chunks/                  # --split 사용 시: 구간별 요약 프롬프트
+    ├── part_01_000m-010m.md
+    └── ...
 ```
 
 ## 개발

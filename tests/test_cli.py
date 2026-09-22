@@ -7,6 +7,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from prepreplay.cli import app
+from prepreplay.utils.ffmpeg import VideoInfo
 
 from .conftest import requires_ffmpeg
 
@@ -112,3 +113,58 @@ def test_run_rejects_video_without_audio_track(tmp_path: Path, silent_video: Pat
     result = runner.invoke(app, ["run", str(silent_video), "--output", str(tmp_path / "out")])
     assert result.exit_code == 1
     assert "오디오 추출" in result.output
+
+
+def test_run_rejects_invalid_split_format(tmp_path: Path) -> None:
+    bogus = tmp_path / "video.mp4"
+    bogus.write_bytes(b"not a real mp4 but extension is fine for this check")
+    result = runner.invoke(app, ["run", str(bogus), "--split", "abc"])
+    assert result.exit_code == 1
+    assert "구간 분할" in result.output
+
+
+@requires_ffmpeg
+def test_run_warns_on_long_video_without_split(
+    tmp_path: Path, sample_video: Path, fake_whisper_model, monkeypatch
+) -> None:
+    """30분 초과 영상인데 --split을 안 주면 경고가 떠야 한다(실제 30분 영상 생성 없이 probe 결과만 흉내).""" # noqa: E501
+    import prepreplay.cli as cli_module
+
+    real_probe_video = cli_module.probe_video
+
+    def _fake_probe_video(path):
+        info = real_probe_video(path)
+        return VideoInfo(
+            path=info.path,
+            duration_seconds=1900.0,  # 30분(1800초) 초과
+            width=info.width,
+            height=info.height,
+            format_name=info.format_name,
+            video_codec=info.video_codec,
+            audio_codec=info.audio_codec,
+            has_audio=info.has_audio,
+            size_bytes=info.size_bytes,
+        )
+
+    monkeypatch.setattr(cli_module, "probe_video", _fake_probe_video)
+
+    result = runner.invoke(app, ["run", str(sample_video), "--output", str(tmp_path / "out")])
+    assert "30분을 넘는 영상" in result.output
+    assert "--split" in result.output
+
+
+@requires_ffmpeg
+def test_run_with_split_creates_chunk_files(
+    tmp_path: Path, sample_video: Path, fake_whisper_model
+) -> None:
+    output_root = tmp_path / "out"
+    result = runner.invoke(
+        app,
+        ["run", str(sample_video), "--output", str(output_root), "--split", "1s"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "구간 분할 완료" in result.output
+    chunks_dir = output_root / sample_video.stem / "chunks"
+    assert chunks_dir.is_dir()
+    assert list(chunks_dir.glob("part_*.md"))
+    assert (chunks_dir / "manifest.json").is_file()

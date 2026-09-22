@@ -73,3 +73,9 @@ class SummaryPromptError(PrepReplayError):
     """summary_prompt.md 생성 실패 (템플릿 누락, index.md 없음 등)."""
 
     stage = "요약 프롬프트 생성"
+
+
+class SplitError(PrepReplayError):
+    """--split 값이 잘못되었거나, 구간 분할(chunks/*.md) 생성에 실패했을 때."""
+
+    stage = "구간 분할"
