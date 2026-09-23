@@ -72,6 +72,21 @@ def _extract_index_sections(index_markdown: str) -> str:
     return index_markdown.strip()
 
 
+def _analysis_output_instruction(video_name: str) -> list[str]:
+    """파일 작업이 가능한 LLM이 분석 결과를 일관된 위치에 저장하도록 안내한다."""
+    video_stem = Path(video_name).stem
+    analysis_filename = f"{video_stem}_analysis.md"
+    return [
+        "## 분석 결과 저장 규칙",
+        "",
+        "파일을 직접 읽고 쓸 수 있는 에이전트라면 완성된 분석 결과를 "
+        f"`output/analysis/{analysis_filename}`에 저장해주세요.",
+        f"이 프롬프트의 `frames/...` 이미지 경로를 결과 문서에 옮길 때는 "
+        f"새 문서 위치를 기준으로 `../{video_stem}/frames/...`로 바꿔 이미지가 "
+        "정상 표시되게 해주세요.",
+    ]
+
+
 def generate_summary_prompt(
     output_dir: Path,
     *,
@@ -102,6 +117,8 @@ def generate_summary_prompt(
         f"# {video_name} 요약 프롬프트",
         "",
         instruction,
+        "",
+        *_analysis_output_instruction(video_name),
         "",
         "## 영상 정보",
         f"- 파일명: {video_name}",

@@ -70,6 +70,8 @@ def test_generate_summary_prompt_includes_instruction_and_index_sections(
     assert "## 00:00 - 00:03" in content  # index.md 섹션이 그대로 포함
     assert "![화면](frames/frame_00m03s.jpg)" in content
     assert "- 파일명: sample.mp4" in content
+    assert "`output/analysis/sample_analysis.md`" in content
+    assert "`../sample/frames/...`" in content
     # index.md의 헤더(메타정보)는 중복해서 넣지 않는다.
     assert content.count("- 영상: sample.mp4") == 0
 

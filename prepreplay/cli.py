@@ -22,8 +22,8 @@ from prepreplay.config import (
 from prepreplay.errors import DependencyError, InputValidationError, PrepReplayError
 from prepreplay.logging_setup import configure_logging
 from prepreplay.state import is_stage_complete, mark_stage_complete
-from prepreplay.steps.audio import extract_audio
-from prepreplay.steps.diarize import diarize_audio
+from prepreplay.steps.audio import AUDIO_FILENAME, extract_audio
+from prepreplay.steps.diarize import DIARIZATION_FILENAME, diarize_audio
 from prepreplay.steps.frames import extract_frames
 from prepreplay.steps.index import generate_index
 from prepreplay.steps.split import (
@@ -32,7 +32,7 @@ from prepreplay.steps.split import (
     split_into_chunks,
 )
 from prepreplay.steps.summary_prompt import generate_summary_prompt
-from prepreplay.steps.transcribe import transcribe_audio
+from prepreplay.steps.transcribe import SEGMENTS_FILENAME, SRT_FILENAME, TXT_FILENAME, transcribe_audio
 from prepreplay.utils.ffmpeg import find_ffmpeg, find_ffprobe, get_version, probe_video
 from prepreplay.utils.gpu import detect_gpu
 
@@ -189,27 +189,51 @@ def _run_single_video(
     def _stage_force(stage: str) -> bool:
         return cfg.force or not is_stage_complete(output_dir, stage)
 
-    stage_start = time.perf_counter()
-    audio_result = extract_audio(
-        video, output_dir, info, force=_stage_force("audio"), console=active_console
+    transcription_ready = is_stage_complete(output_dir, "transcribe") and all(
+        (output_dir / filename).is_file()
+        for filename in (SEGMENTS_FILENAME, SRT_FILENAME, TXT_FILENAME)
     )
-    if audio_result.skipped:
-        active_console.print(
-            f"[dim]오디오 추출 스킵 (캐시됨): {audio_result.path} (--force로 재생성 가능)[/dim]"
+    diarization_ready = not cfg.diarize or (
+        is_stage_complete(output_dir, "diarize")
+        and (output_dir / DIARIZATION_FILENAME).is_file()
+    )
+    audio_path = output_dir / AUDIO_FILENAME
+    audio_needed = cfg.force or not transcription_ready or not diarization_ready
+
+    if audio_needed:
+        stage_start = time.perf_counter()
+        audio_result = extract_audio(
+            video, output_dir, info, force=_stage_force("audio"), console=active_console
         )
-        logger.info("[오디오 추출] 스킵 (캐시됨): %s", audio_result.path)
+        audio_path = audio_result.path
     else:
-        active_console.print(f"[green]오디오 추출 완료:[/green] {audio_result.path}")
-        logger.info(
-            "[오디오 추출] 완료 (%.1fs): %s", time.perf_counter() - stage_start, audio_result.path
+        audio_result = None
+        active_console.print(
+            "[dim]오디오 추출 생략 (STT와 화자 분리 결과가 이미 완료됨)[/dim]"
         )
-    mark_stage_complete(output_dir, "audio")
+        logger.info("[오디오 추출] 생략 (후속 결과 완료, 임시 오디오 불필요)")
+
+    if audio_result is not None:
+        if audio_result.skipped:
+            active_console.print(
+                f"[dim]오디오 추출 스킵 (캐시됨): {audio_result.path} "
+                "(--force로 재생성 가능)[/dim]"
+            )
+            logger.info("[오디오 추출] 스킵 (캐시됨): %s", audio_result.path)
+        else:
+            active_console.print(f"[green]오디오 추출 완료:[/green] {audio_result.path}")
+            logger.info(
+                "[오디오 추출] 완료 (%.1fs): %s",
+                time.perf_counter() - stage_start,
+                audio_result.path,
+            )
+        mark_stage_complete(output_dir, "audio")
 
     diarization_segments = None
     if cfg.diarize:
         stage_start = time.perf_counter()
         diarize_result = diarize_audio(
-            audio_result.path,
+            audio_path,
             output_dir,
             model_name=cfg.diarization_model,
             hf_token=cfg.hf_token,
@@ -237,7 +261,7 @@ def _run_single_video(
 
     stage_start = time.perf_counter()
     transcript_result = transcribe_audio(
-        audio_result.path,
+        audio_path,
         output_dir,
         model_size=cfg.model,
         language=cfg.language,
@@ -379,6 +403,17 @@ def _run_single_video(
                 split_result.chunks_dir,
             )
         mark_stage_complete(output_dir, "split")
+
+    try:
+        if audio_path.exists():
+            audio_path.unlink()
+            active_console.print(f"[dim]임시 오디오 삭제 완료: {audio_path}[/dim]")
+            logger.info("[임시 파일 정리] 삭제 완료: %s", audio_path)
+    except OSError as exc:
+        active_console.print(
+            f"[yellow]⚠ 임시 오디오를 삭제하지 못했습니다: {audio_path} ({exc})[/yellow]"
+        )
+        logger.warning("[임시 파일 정리] 삭제 실패: %s (%s)", audio_path, exc)
 
     logger.info("=== 실행 완료 ===")
 

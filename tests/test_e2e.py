@@ -11,6 +11,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+from prepreplay.errors import TranscriptionError
 from prepreplay.cli import app
 
 from .conftest import requires_ffmpeg
@@ -58,33 +59,35 @@ def test_run_creates_state_json_marking_ran_stages_complete(
 
 @requires_ffmpeg
 def test_resume_skips_completed_audio_but_reruns_interrupted_transcribe(
-    tmp_path: Path, sample_video: Path, fake_whisper_model
+    tmp_path: Path, sample_video: Path, fake_whisper_model, monkeypatch
 ) -> None:
     """DoD: STT 도중 중단 후 재실행하면 오디오 추출은 다시 하지 않는다."""
+    import prepreplay.cli as cli_module
+
     output_root = tmp_path / "out"
-    result = runner.invoke(app, ["run", str(sample_video), "--output", str(output_root)])
-    assert result.exit_code == 0, result.output
+    real_transcribe_audio = cli_module.transcribe_audio
+
+    def _fail_transcription(*args, **kwargs):
+        raise TranscriptionError("테스트용 STT 중단")
+
+    monkeypatch.setattr(cli_module, "transcribe_audio", _fail_transcription)
+    first_result = runner.invoke(app, ["run", str(sample_video), "--output", str(output_root)])
+    assert first_result.exit_code == 1, first_result.output
 
     video_output_dir = output_root / sample_video.stem
     audio_path = video_output_dir / "audio.wav"
+    assert audio_path.is_file()  # 실패 시에는 재개를 위해 보존
     audio_mtime_before = audio_path.stat().st_mtime_ns
 
-    state_path = video_output_dir / "state.json"
-    state = json.loads(state_path.read_text(encoding="utf-8"))
-
-    # STT 중단 시뮬레이션: transcribe 완료 마커 + 산출물 제거, audio는 그대로 둔다.
-    del state["stages"]["transcribe"]
-    state_path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
-    (video_output_dir / "segments.json").unlink()
-    (video_output_dir / "transcript.srt").unlink()
-    (video_output_dir / "transcript.txt").unlink()
-
+    monkeypatch.setattr(cli_module, "transcribe_audio", real_transcribe_audio)
     result = runner.invoke(app, ["run", str(sample_video), "--output", str(output_root)])
 
     assert result.exit_code == 0, result.output
     assert "오디오 추출 스킵" in result.output
     assert "STT 완료" in result.output
-    assert audio_path.stat().st_mtime_ns == audio_mtime_before  # 오디오는 재생성되지 않았어야 함
+    assert "임시 오디오 삭제 완료" in result.output
+    assert not audio_path.exists()
+    assert audio_mtime_before > 0
     assert (video_output_dir / "segments.json").is_file()
 
 
@@ -104,17 +107,17 @@ def test_resume_regenerates_when_file_present_but_state_unmarked(
     state_path = video_output_dir / "state.json"
     state = json.loads(state_path.read_text(encoding="utf-8"))
     del state["stages"]["audio"]
+    del state["stages"]["transcribe"]
     state_path.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    (video_output_dir / "segments.json").unlink()
+    (video_output_dir / "transcript.srt").unlink()
+    (video_output_dir / "transcript.txt").unlink()
 
     result = runner.invoke(app, ["run", str(sample_video), "--output", str(output_root)])
     assert result.exit_code == 0, result.output
     assert "오디오 추출 완료" in result.output  # 스킵이 아니라 재생성됨
-
-    import wave
-
-    with wave.open(str(audio_path), "rb") as wav_file:
-        assert wav_file.getframerate() == 16000
-        assert wav_file.getnchannels() == 1
+    assert "임시 오디오 삭제 완료" in result.output
+    assert not audio_path.exists()
 
 
 @requires_ffmpeg

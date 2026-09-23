@@ -51,6 +51,8 @@ pip install -e ".[diarization]"
 후 `prepreplay run`을 그대로 다시 실행하면 완료된 단계는 건너뛰고 중단된 단계부터
 이어서 진행합니다. `run`에 영상 파일 대신 디렉터리를 넘기면 그 안의 영상들을 파일명순으로
 일괄 처리합니다 — 하나가 실패해도 나머지는 계속 처리되고, 끝에 성공/실패 요약이 나옵니다.
+용량이 큰 임시 `audio.wav`는 모든 단계가 정상 완료되면 자동 삭제되며, 실패 시에는 재개를
+위해 남겨둡니다.
 `--diarize`로 화자 분리(누가 말했는지 `[화자1]`/`[화자2]` 라벨)도 켤 수 있습니다(별도 설치와
 HuggingFace 토큰 필요, 아래 참고). 그 밖의 편의 기능은
 [docs/DEVELOPMENT_PLAN.md](docs/DEVELOPMENT_PLAN.md)의 PR 로드맵에 따라 계속 추가됩니다.
@@ -92,26 +94,31 @@ prepreplay doctor
 
 실행이 끝나면 `output/{video_name}/summary_prompt.md`를 그대로 복사해 Claude에 붙여넣으면
 됩니다. `--split`을 쓰면 `chunks/` 폴더의 파일들을 구간별로 각각 붙여넣을 수도 있습니다
-(한 번에 넣기엔 스크립트가 너무 긴 긴 영상용).
+(한 번에 넣기엔 스크립트가 너무 긴 긴 영상용). 파일 작업이 가능한 에이전트가 생성한 분석
+결과는 `output/analysis/{video_name}_analysis.md`에 모아 저장합니다. 이때 프레임 이미지 링크는
+분석 문서 기준 `../{video_name}/frames/...`를 사용합니다.
 
 ## 출력 구조
 
 ```
-output/{video_name}/
-├── audio.wav                # 추출된 오디오 (16kHz mono 16-bit PCM WAV)
-├── segments.json             # STT 결과 구조화 데이터 (이후 단계가 의존)
-├── transcript.srt           # 타임스탬프 포함 스크립트
-├── transcript.txt           # 순수 텍스트
-├── frames/                  # 장면 전환 시점 프레임 이미지
-├── frames.json               # 프레임 메타데이터
-├── index.md                 # 타임스탬프-프레임-스크립트 매핑
-├── summary_prompt.md        # Claude에 바로 붙여넣을 요약 프롬프트
-├── state.json                # 재개(resume)용 단계별 완료 상태 (커밋 금지)
-├── run.log                   # 실행 단계별 로그 (커밋 금지)
-├── diarization.json          # --diarize 사용 시: 화자별 발화 구간
-└── chunks/                  # --split 사용 시: 구간별 요약 프롬프트
-    ├── part_01_000m-010m.md
-    └── manifest.json
+output/
+├── analysis/
+│   └── {video_name}_analysis.md  # LLM이 작성한 영상별 분석 결과
+└── {video_name}/
+    ├── audio.wav                 # 처리 중에만 존재하는 임시 오디오(정상 완료 시 자동 삭제)
+    ├── segments.json             # STT 결과 구조화 데이터 (이후 단계가 의존)
+    ├── transcript.srt            # 타임스탬프 포함 스크립트
+    ├── transcript.txt            # 순수 텍스트
+    ├── frames/                   # 장면 전환 시점 프레임 이미지
+    ├── frames.json               # 프레임 메타데이터
+    ├── index.md                  # 타임스탬프-프레임-스크립트 매핑
+    ├── summary_prompt.md         # Claude에 바로 붙여넣을 요약 프롬프트
+    ├── state.json                # 재개(resume)용 단계별 완료 상태 (커밋 금지)
+    ├── run.log                   # 실행 단계별 로그 (커밋 금지)
+    ├── diarization.json          # --diarize 사용 시: 화자별 발화 구간
+    └── chunks/                   # --split 사용 시: 구간별 요약 프롬프트
+        ├── part_01_000m-010m.md
+        └── manifest.json
 ```
 
 `--diarize`를 쓰면 `segments.json`/`transcript.srt`/`transcript.txt`/`index.md`의 각 문장

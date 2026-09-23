@@ -15,7 +15,7 @@ LLM에게 "영상을 본 것처럼" 맥락을 넘기는 것이 목적입니다.
 명령 한 번(`prepreplay run 영상파일`)으로 다음이 순서대로 실행됩니다.
 
 1. 입력 영상의 존재와 확장자를 확인하고, ffprobe로 길이·해상도·코덱을 읽습니다.
-2. 영상에서 오디오만 뽑아 `audio.wav`로 저장합니다.
+2. 영상에서 오디오만 뽑아 임시 `audio.wav`로 저장합니다.
 3. (선택) 화자 분리를 켰다면 누가 언제 말했는지 감지합니다.
 4. Whisper로 음성을 텍스트로 바꿔 `transcript.srt`, `transcript.txt`, `segments.json`을 만듭니다.
 5. 화면이 크게 바뀌는 시점을 찾아 그 장면을 `frames/` 폴더에 이미지로 저장합니다.
@@ -140,6 +140,7 @@ STT 완료 (device=cuda, language=ko): transcript.srt, transcript.txt, segments.
 프레임 추출 완료 (장면 감지, 101개): output\강의\frames
 index.md 생성 완료 (101개 구간): output\강의\index.md
 summary_prompt.md 생성 완료 (mode=lecture): output\강의\summary_prompt.md
+임시 오디오 삭제 완료: output\강의\audio.wav
 ```
 
 30분이 넘는 영상인데 `--split`을 지정하지 않으면 구간 분할을 권장하는 경고가 표시됩니다.
@@ -176,7 +177,8 @@ chunks/
 
 ```
 output/강의/summary_prompt.md 를 읽고 정리해줘.
-결과는 같은 폴더에 analysis.md로 저장해줘.
+결과는 output/analysis/강의_analysis.md로 저장해줘.
+결과에 프레임 이미지를 넣는다면 ../강의/frames/... 경로를 사용해줘.
 ```
 
 프롬프트가 너무 길거나 구간별로 보고 싶으면 `chunks/` 안의 파일을 하나씩 넘기면 됩니다.
@@ -206,7 +208,7 @@ output/영상파일명/
 ├── transcript.txt       ← 순수 텍스트 스크립트
 ├── segments.json        ← STT 원본 데이터 (프로그램이 쓰는 중간 산출물)
 ├── frames.json          ← 프레임 메타데이터 (중간 산출물)
-├── audio.wav            ← 추출된 오디오 (중간 산출물, 용량이 큽니다)
+├── audio.wav            ← 처리 중에만 존재하는 임시 파일 (정상 완료 시 자동 삭제)
 ├── diarization.json     ← --diarize 사용 시: 화자별 발화 구간
 ├── state.json           ← 재개용 단계별 완료 기록
 └── run.log              ← 실행 로그 (문제가 생겼을 때 확인)
@@ -215,8 +217,9 @@ output/영상파일명/
 평소에 열어볼 파일은 `summary_prompt.md`와 `index.md` 두 개면 충분합니다. 나머지는 프로그램이
 쓰는 중간 산출물이거나 문제 해결용입니다.
 
-`audio.wav`는 용량이 크므로(50분 영상 기준 약 97MB), 분석이 끝난 뒤 지워도 됩니다. 다만 지운
-뒤 다시 실행하면 오디오 추출부터 다시 합니다.
+`audio.wav`는 용량이 크므로(50분 영상 기준 약 97MB), 모든 단계가 정상 완료되면 자동으로
+삭제됩니다. 처리 도중 실패하면 다음 실행에서 이어갈 수 있도록 남겨두며, 재실행 성공 후
+자동 삭제됩니다. `segments.json`과 `frames.json`은 재생성과 구간 분할에 쓰이므로 유지합니다.
 
 ## 자주 쓰는 실행 예시
 

@@ -98,9 +98,10 @@ def test_run_batch_resumes_only_failed_video_after_fix(
     first_result = runner.invoke(app, ["run", str(video_dir), "--output", str(output_root)])
     assert first_result.exit_code == 1, first_result.output
 
-    good_audio_path = output_root / "01_good" / "audio.wav"
-    assert good_audio_path.is_file()
-    good_audio_mtime_before = good_audio_path.stat().st_mtime_ns
+    good_prompt_path = output_root / "01_good" / "summary_prompt.md"
+    assert good_prompt_path.is_file()
+    good_prompt_mtime_before = good_prompt_path.stat().st_mtime_ns
+    assert not (output_root / "01_good" / "audio.wav").exists()
 
     # "고쳐서" 재실행: 오디오 트랙이 있는 영상으로 같은 파일명을 덮어씀
     _make_video(bad_path, with_audio=True)
@@ -108,7 +109,10 @@ def test_run_batch_resumes_only_failed_video_after_fix(
 
     assert second_result.exit_code == 0, second_result.output
     assert "배치 완료: 성공 2/2" in second_result.output
-    assert good_audio_path.stat().st_mtime_ns == good_audio_mtime_before  # 재생성되지 않음
+    assert "오디오 추출 생략" in second_result.output
+    assert good_prompt_path.stat().st_mtime_ns == good_prompt_mtime_before
+    assert not (output_root / "01_good" / "audio.wav").exists()
+    assert not (output_root / "02_bad" / "audio.wav").exists()
     assert (output_root / "02_bad" / "summary_prompt.md").is_file()
 
 
