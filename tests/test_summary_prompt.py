@@ -158,4 +158,4 @@ def test_generate_summary_prompt_force_regenerates(tmp_path: Path) -> None:
 
     assert result.skipped is False
     content = result.path.read_text(encoding="utf-8")
-    assert "타임스탬프 목차" in content  # lecture.md 지시문
+    assert "강의 대체재" in content  # lecture.md 지시문

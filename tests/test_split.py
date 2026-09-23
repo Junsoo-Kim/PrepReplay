@@ -90,7 +90,7 @@ def test_split_into_one_hour_video_into_six_chunks(tmp_path: Path) -> None:
     first_content = chunk_files[0].read_text(encoding="utf-8")
     assert "0분대 발언입니다." in first_content
     assert "10분대 발언입니다." not in first_content  # 세그먼트가 섞이지 않음
-    assert "타임스탬프 목차" in first_content  # lecture.md 지시문 포함
+    assert "강의 대체재" in first_content  # lecture.md 지시문 포함
 
 
 def test_split_does_not_cut_a_segment_across_chunks(tmp_path: Path) -> None:
