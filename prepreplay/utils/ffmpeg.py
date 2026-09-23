@@ -37,6 +37,8 @@ def get_version(executable: str) -> Optional[str]:
             [executable, "-version"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=10,
             check=False,
         )
@@ -94,7 +96,15 @@ def probe_video(path: Path) -> VideoInfo:
         str(path),
     ]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, check=False)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+        )
     except subprocess.TimeoutExpired as exc:
         raise ProbeError(f"ffprobe 실행이 30초를 초과했습니다: {path}") from exc
 

@@ -45,6 +45,7 @@ console = Console()
 error_console = Console(stderr=True)
 
 MIN_RECOMMENDED_FREE_GB = 5.0
+DEFAULT_VIDEO_DIR = Path("video")
 
 
 def _version_callback(value: bool) -> None:
@@ -386,10 +387,12 @@ def _run_single_video(
 def run(
     video: Path = typer.Argument(
         ...,
-        help="분석할 로컬 영상 파일 또는 영상이 담긴 디렉터리 경로 (디렉터리면 안의 영상을 파일명순으로 일괄 처리)",
-        exists=True,
+        help=(
+            "분석할 로컬 영상 파일 또는 영상이 담긴 디렉터리 경로 (디렉터리면 안의 영상을 "
+            f"파일명순으로 일괄 처리). 그대로 못 찾으면 './{DEFAULT_VIDEO_DIR}/' 안에서도 찾는다 "
+            "— 파일명만 써도 됨"
+        ),
         dir_okay=True,
-        readable=True,
     ),
     mode: Optional[str] = typer.Option(
         None, "--mode", help=f"유스케이스 모드 ({', '.join(VALID_MODES)}). 기본: default"
@@ -456,6 +459,16 @@ def run(
                 hint="둘 중 하나만 지정하세요.",
             )
         active_console = Console(quiet=True) if quiet else console
+
+        if not video.exists():
+            fallback = DEFAULT_VIDEO_DIR / video
+            if fallback.exists():
+                video = fallback
+            else:
+                raise InputValidationError(
+                    f"영상(또는 디렉터리)을 찾을 수 없습니다: {video}",
+                    hint=f"현재 디렉터리 또는 ./{DEFAULT_VIDEO_DIR}/ 안에 있는지 확인하세요.",
+                )
 
         cfg = resolve_config(
             config_path=config_path,

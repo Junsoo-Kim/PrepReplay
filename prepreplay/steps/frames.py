@@ -81,7 +81,15 @@ def _extract_raw_frames(
         str(pattern),
     ]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+        )
     except subprocess.TimeoutExpired as exc:
         raise FrameExtractionError(f"프레임 추출이 시간 초과되었습니다: {video}") from exc
 
